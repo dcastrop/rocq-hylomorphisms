@@ -8,39 +8,10 @@ Require Import Hylo.Utils.
 Require Export Hylo.Equivalence.
 Require Export Hylo.Morphism.
 
-
-(** The justification why the class below this comment defines a Container can be
-  * found later, with the definitions: App, fmapA, etc.
-  * - [S] is the type of "shapes" of this Cont
-  * - [P] is the type of "positions" in a shape
-  * - [valid] determines whether a position is valid in a shape
-  *
-  * It is defined as a class to help extract cleaner code to OCaml.
-  * An alternative definition, closer to the literature, would be to have
-  * a record,
-  * [ Record Cont :=
-      { shape : Type;
-        position : Type;
-        valid : shape -> position -> bool;
-      }
-    ]
-  * use dependent types,
-  * [ Record Cont :=
-      { shape : Type;
-        position : shape -> Type;
-      }
-    ]
-  * or even a straightforward "strict-positivisation" of an actual functor [F]:
-  * [ Record Apply (F : Type -> Type) (X : Type) :=
-      { witness : Type;
-        shape : F witness;
-        position : witness -> X;
-      }
-    ]
-  * However, these alternatives would lead to lots of [Obj.magic] in the
-  * generated OCaml code, and a priority of this experiment was extracting
-  * "somewhat reasonable/clean" OCaml code.
-  *)
+(** Containers: shapes [Sh], positions [P], and the positions [valid] in each
+  * shape. A class with fixed [Sh] and [P], rather than a record with types as
+  * fields or positions depending on shapes, so that extracted OCaml code needs
+  * no [Obj.magic]. *)
 #[mode = "! - -"]
 Class Cont `{Esh : setoid Sh} (P : Type) :=
   { valid : Sh * P ~> bool
@@ -61,18 +32,16 @@ Arguments Valid & {Sh _ P F s} : rename.
 Lemma elem_val_eq `{F : Cont Sh P} (s : Sh) (e1 e2 : Pos F s)
   : val e1 = val e2 -> e1 = e2.
 Proof.
-  destruct e1 as [v1 d1], e2 as [v d2]; simpl in *.
-  intros; subst. rewrite (bool_irrelevance d1 d2). auto.
+  destruct e1, e2; simpl; intros ->; f_equal; apply bool_irrelevance.
 Qed.
 
 Lemma elem_valid_irr `{F : Cont Sh P} (s1 s2 : Sh) (Eq : s1 =e s2)
   : forall e1 : Pos F s1, exists e3 : Pos F s2, val e1 = val e3.
 Proof.
-  intros [v d1]. simpl.
-  assert (d2 : valid (s2, v) =e true).
-  { rewrite <- d1. apply app_eq. split; simpl; auto with ffix. }
-  simpl in *.
-  exists (MkElem v d2); auto.
+  intros [v d1].
+  assert (d2 : valid (s2, v) =e true)
+    by (rewrite <- d1; apply app_eq; split; simpl; auto with ffix).
+  exists (MkElem v d2); reflexivity.
 Qed.
 
 Record App `{F : Cont Sh P} (X : Type) :=
@@ -88,9 +57,7 @@ Lemma cont_valid_irrelevant `{F : Cont Sh P} (X : Type) :
   forall (x : App F X) (e1 e2 : Pos F (shape x)),
     val e1 = val e2 -> cont x e1 = cont x e2.
 Proof.
-  intros [s p]. simpl. intros [e1 d1] [e2 d2]. simpl. intros Eq. subst.
-  rewrite (bool_irrelevance d1 d2).
-  reflexivity.
+  intros [s k] e1 e2 E; simpl in *; rewrite (elem_val_eq E); reflexivity.
 Qed.
 
 Inductive AppR `{F : Cont Sh P} (X : Type) {eX : setoid X}
@@ -105,10 +72,8 @@ Inductive AppR `{F : Cont Sh P} (X : Type) {eX : setoid X}
   Instance App_setoid `{F : Cont Sh P} `{eX : setoid X} : setoid (App F X).
 Proof.
   apply (@MkSetoid _ (@AppR Sh _ P F X eX)).
-  - intros [shx kx]. constructor; eauto with ffix.
-    simpl.  intros [x1 d1] [x2 d2] Eq. simpl in *. subst.
-    rewrite (bool_irrelevance d1 d2).
-    reflexivity.
+  - intros [shx kx]; constructor; eauto with ffix.
+    intros e1 e2 E; simpl; rewrite (elem_val_eq E); reflexivity.
   - intros x y [Sxy Exy]. split; eauto with ffix.
   - intros x y z [Sxy Exy] [Syz Eyz]; simpl; split.
     * rewrite Sxy; eauto with ffix.
@@ -126,8 +91,8 @@ Lemma cont_ext_eq `{F : Cont Sh P} (s : Sh) `{setoid X}
   (k k' : Pos F s -> X)
   : (forall x, k x =e k' x) -> AppR (MkCont s k) (MkCont s k').
 Proof.
-  intros Heq. constructor; simpl in *; auto with ffix.
-  intros e1 e2 Hv. rewrite (elem_val_eq Hv); simpl in *; auto with ffix.
+  intros Heq; constructor; simpl; auto with ffix.
+  intros e1 e2 Hv; rewrite (elem_val_eq Hv); auto.
 Qed.
 
 Definition fmapA `{F : Cont Sh P} `{eA : setoid A} `{eB : setoid B}
@@ -137,7 +102,7 @@ Definition fmapA `{F : Cont Sh P} `{eA : setoid A} `{eB : setoid B}
 Lemma fmapA_eqF `{F : Cont Sh P} `{setoid A} `{setoid B} (f : A ~> B)
   : forall (x y : App F A), x =e y -> fmapA (F:= F) f x =e fmapA f y.
 Proof.
-  intros [sx kx] [sy ky] [Es Ek]. split; auto. intros.  apply app_eq. auto.
+  intros [sx kx] [sy ky] [Es Ek]; split; auto; intros; apply app_eq, Ek; auto.
 Qed.
 
 Abbreviation fmapU f :=
@@ -147,11 +112,7 @@ Abbreviation fmapU f :=
 
 Lemma fmapU_eq `{F : Cont Sh P} `{eA : setoid A} `{eB : setoid B} :
   forall f g : A ~> B, f =e g -> fmapU f =e (fmapU g : App F A ~> App F B).
-Proof.
-  intros f g Hfg [sh p]. simpl.
-  apply cont_ext_eq.
-  intros. apply Hfg.
-Qed.
+Proof. intros f g Hfg [sh p]; apply cont_ext_eq; intros; apply Hfg. Qed.
 
 Definition fmap `{F : Cont Sh P} `{eA : setoid A} `{eB : setoid B} :
   (A ~> B) ~> App F A ~> App F B := MkMorph fmapU_eq.
@@ -163,20 +124,14 @@ Lemma fmap_comp `{F : Cont Sh P} `{setoid A} `{setoid B} `{setoid C}
   (f : B ~> C) (g : A ~> B) : fmap (F:=F) (f \o g) =e fmap f \o fmap g.
 Proof. intros []. reflexivity. Qed.
 
+(** * Polynomial functors as containers *)
 
-(* Polynomial functors as containers *)
+#[export] Instance Id : Cont unit unit :=
+  {| valid := {| app := fun _ => true; app_eq := fun _ _ _ => eq_refl |} |}.
 
-(* Identity container *)
-#[export] Instance Id : Cont unit unit.
-refine {| valid := {| app := fun _ => true|} |}.
-intros. reflexivity.
-Defined.
-
-(* Constant container *)
-#[export] Instance K A : Cont A False.
-refine {| valid := {| app := fun x : A * False => match snd x with end |} |}.
-intros. destruct (snd x).
-Defined.
+#[export] Instance K A : Cont A False :=
+  {| valid := {| app := fun x : A * False => match snd x with end;
+                 app_eq := fun x _ _ => match snd x with end |} |}.
 
 (* Product container *)
 Section Product.
@@ -190,10 +145,8 @@ Section Product.
                                | inl p => valid (fst (fst x), p)
                                | inr p => valid (snd (fst x), p)
                                end |} |}.
-  intros [[??]?][[??]p0] [[??]?]. simpl in *; subst.
-  destruct p0 as [p|p].
-  - apply fold_eq, app_eq. simpl; split; trivial.
-  - apply fold_eq, app_eq. simpl; split; trivial.
+  intros [[??]?] [[??] p] [[??]?]; simpl in *; subst;
+    destruct p; apply fold_eq, app_eq; simpl; split; trivial.
   Defined.
 End Product.
 
@@ -211,9 +164,8 @@ Section Sum.
                                | _, _ => false
                                end |} |}.
   intros [[?|?][?|?]] [[?|?][?|?]] [E F];
-    simpl in *; subst; try (inversion F); try (inversion E); trivial.
-  - apply fold_eq, app_eq. simpl; split; trivial.
-  - apply fold_eq, app_eq. simpl; split; trivial.
+    simpl in *; subst; try (inversion F); try (inversion E); trivial;
+    apply fold_eq, app_eq; simpl; split; trivial.
   Defined.
 End Sum.
 
@@ -268,9 +220,9 @@ Section Nest.
   Lemma nest_valid_morph
     : forall e1 e2, e1 =e e2 -> nest_valid e1 =e nest_valid e2.
   Proof.
-    unfold nest_valid. Opaque eqRel.
-    intros [[s1 k1] p1] [[s2 k2] p2] [[Es Ek] Ep]. simpl in *.
-    rewrite Es, Ep. reflexivity.
+    unfold nest_valid; with_strategy opaque [eqRel]
+      (intros [[s1 k1] p1] [[s2 k2] p2] [[Es Ek] Ep]; simpl in *;
+       rewrite Es, Ep; reflexivity).
   Qed.
   Definition nest_v : App F X * Pg ~> bool
     := MkMorph nest_valid_morph.
@@ -293,7 +245,8 @@ Section NaturalTransformation.
   Definition eta_ {X} : App F X -> App G X :=
     fun x =>
       match x with
-      | MkCont sx kx => {| shape := eta_S sx; cont := fun p => kx (eta_Pos p) |}
+      | MkCont sx kx =>
+          {| shape := eta_S sx; cont := fun p => kx (eta_Pos p) |}
       end.
   Lemma eta_morph `{setoid X} : forall x y, x =e y -> @eta_ X x =e @eta_ X y.
   Proof.
@@ -317,7 +270,8 @@ Section NaturalTransformation.
   Qed.
 End NaturalTransformation.
 
-Arguments eta {S1 Esh P1} [F] {S2 Esh2 P2} [G eta_S] [eta_P] eta_C X {eX} : rename.
+Arguments eta {S1 Esh P1} [F] {S2 Esh2 P2} [G eta_S] [eta_P] eta_C X {eX}
+  : rename.
 
 Section NatShape.
   Context `(F : Cont S1 P) `{SS2 : setoid S2} (G : Cont S2 P).
@@ -336,23 +290,22 @@ Arguments natural {S1 Esh P F S2 Esh2 G X eX} f : rename.
 Arguments naturalM {S1 Esh P} F {S2 Esh2} G : rename.
 Arguments CompCont {S1 Esh P1} F {S2 Esh2 P2} G : rename.
 
-Lemma id_is_nat `{F : Cont Sf P} : forall (s : Sf) p, valid (F:=F) (id s, p) -> valid (F:=F) (s, p).
-Proof.
-  simpl. trivial.
-Qed.
+Lemma id_is_nat `{F : Cont Sf P}
+  : forall (s : Sf) p, valid (F:=F) (id s, p) -> valid (F:=F) (s, p).
+Proof. trivial. Qed.
 Canonical Structure nat_id `{F : Cont Sf P}
   : naturalM F F := {| natT :=id; natC := id_is_nat |}.
 
 Lemma comp_is_nat `{F : Cont Sf P} `{SSg : setoid Sg} {G : Cont Sg P}
   `{SSh : setoid Sh} {H : Cont Sh P} (f : naturalM G H) (g : naturalM F G)
   : forall s p, valid((f \o g) s, p) -> valid(s, p).
-Proof.
-  intros s p V; simpl in *. do 2 apply natC in V. trivial.
-Qed.
+Proof. intros s p V; do 2 apply natC in V; trivial. Qed.
 Arguments comp_is_nat {_ _ _ _ _ _ _ _ _ _} f g s p.
-Canonical Structure nat_comp `{F : Cont Sf P} `{SSg : setoid Sg} {G : Cont Sg P}
-  `{SSh : setoid Sh} {H : Cont Sh P} (f : naturalM G H) (g : naturalM F G)
+Canonical Structure nat_comp `{F : Cont Sf P} `{SSg : setoid Sg}
+  {G : Cont Sg P} `{SSh : setoid Sh} {H : Cont Sh P}
+  (f : naturalM G H) (g : naturalM F G)
   := {| natT := f \o g; natC := comp_is_nat f g |}.
+#[export] Hint Unfold nat_id nat_comp : canonical.
 
 Lemma natural_idI `{F : Cont Sf P} `{setoid X} : natural id =e id (A:=App F X).
 Proof.
@@ -366,18 +319,17 @@ Lemma natural_comp `{F : Cont Sf P} `{SSg : setoid Sg} {G : Cont Sg P}
     `{EX : setoid X} :
   natural f \o natural g =e natural (X:=X) (f \o g).
 Proof.
-  intros [s k]. Opaque eqRel. simpl. constructor; auto with ffix; simpl.
-  Transparent eqRel.
+  intros [s k].
+  with_strategy opaque [eqRel] (simpl; constructor; auto with ffix; simpl).
   intros [v1 V1] [v2 V2] EQ. simpl in *; subst.
   rewrite (bool_irrelevance (natC _) (comp_is_nat f g s v2 V2)).
   reflexivity.
 Qed.
 
-  Lemma natural_fmap `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
-    `{setoid X} `{setoid Y} (m : naturalM F G) (f : X ~> Y)
-    : natural m \o fmap f =e fmap f \o natural m.
-  Proof. unfold natural; rewrite eta_is_natural. reflexivity. Qed.
-
+Lemma natural_fmap `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
+  `{setoid X} `{setoid Y} (m : naturalM F G) (f : X ~> Y)
+  : natural m \o fmap f =e fmap f \o natural m.
+Proof. unfold natural; rewrite eta_is_natural. reflexivity. Qed.
 
 Section EtaMap.
   Context `{setoid Sf} {Pf Pg} {F : Cont Sf Pf} {G : Cont Sf Pg}.
@@ -438,5 +390,5 @@ Section EtaMap.
   Qed.
 End EtaMap.
 
-Arguments cmap & {Sf}%_type_scope {H} {Pf Pg}%_type_scope {F G} {X}%_type_scope
-                   {H0} {Y}%_type_scope {H1} {A}%_type_scope {H2}.
+Arguments cmap & {Sf}%_type_scope {H} {Pf Pg}%_type_scope {F G}
+  {X}%_type_scope {H0} {Y}%_type_scope {H1} {A}%_type_scope {H2}.

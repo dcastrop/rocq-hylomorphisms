@@ -30,7 +30,8 @@ Definition Tree L A := LFix (TreeF L A).
 
 (* A named morphism, not a plain function: it is the key of the canonical
    [naturalM] structure [nt_tree] below. *)
-Definition nt_shape {L L' A A'} (f : L ~> L') (g : A ~> A') : Ts L A ~> Ts L' A' :=
+Definition nt_shape {L L' A A'} (f : L ~> L') (g : A ~> A')
+  : Ts L A ~> Ts L' A' :=
   morph_of (fun x => match x with
                      | Leaf _ l => Leaf _ (f l)
                      | Node _ n => Node _ (g n)
@@ -43,13 +44,14 @@ Proof. intros [l|n] p; trivial. Qed.
 Canonical Structure nt_tree {L L' A A'} (f : L ~> L') (g : A ~> A')
   : naturalM (TreeF L A) (TreeF L' A')
   := {| natT := nt_shape f g; natC := @nt_shape_is_nat _ _ _ _ f g |}.
+#[export] Hint Unfold nt_tree : canonical.
 
 Definition map_tree {L L' A A'} (f : L ~> L') (g : A ~> A')
   : LFix (TreeF L A) ~> LFix (TreeF L' A') :=
   everywhere (nt_shape f g).
 
 Lemma dom_leaf_false L A (x : L) : Pos (TreeF L A) (Leaf A x) -> False.
-Proof. intros []. simpl in *. discriminate. Qed.
+Proof. intros []; simpl in *; discriminate. Qed.
 Definition dom_leaf L A B (e : L) (x : Pos (TreeF L A) (Leaf A e)) : B :=
   False_rect _ (dom_leaf_false x).
 
@@ -75,7 +77,6 @@ Abbreviation rightB k := (e_rbranch k eq_refl).
 Definition posL {A} (h : A) : Pos (TreeF unit A) (Node unit h) :=
   MkElem Lbranch eq_refl.
 Definition posR {A} (h : A) : Pos (TreeF unit A) (Node unit h) :=
-
   MkElem Rbranch eq_refl.
 
 Definition a_out {L A X : Type} (x : App (TreeF L A) X) : ITreeF L A X :=
@@ -105,28 +106,32 @@ Definition fto_tree {L A}: RCoalg (TreeF L A) (itree L A) := Rec to_tree_rec.
 Definition itree_to_tree {L A} : itree L A ~> Tree L A :=
   rana fto_tree.
 
-Definition to_itree {L A} (x : App (TreeF L A) (itree L A)) : itree L A :=
-  match a_out x with
-  | leaf l => i_leaf _ l
-  | node n l r => i_node n l r
-  end.
+Definition to_itree {L A} : App (TreeF L A) (itree L A) ~> itree L A :=
+  morph_of (fun x : App (TreeF L A) (itree L A) =>
+    match a_out x with
+    | leaf l => i_leaf _ l
+    | node n l r => i_node n l r
+    end).
 Definition tree_to_itree {L A} : Tree L A ~> itree L A := cata to_itree.
 
-Lemma tree_itree_iso1 {L A} : itree_to_tree (L:=L) (A:=A) \o tree_to_itree =e id.
-  Opaque to_tree_rec.
-  Opaque cata.
-  Opaque rana.
-  intros x. unfold tree_to_itree, itree_to_tree.
-  induction x as [[[|n] kx] Ih]; rewrite cata_unfold, rana_unfold; simpl in *.
-  - split; trivial. intros e. apply (dom_leaf _ e).
-  - split; trivial. intros [[|] V1] [v2 V2]; simpl.
-    + intros <-. rewrite (bool_irrelevance V2 (lnode_valid eq_refl)). trivial.
-    + intros <-. rewrite (bool_irrelevance V2 (rnode_valid eq_refl)). trivial.
+Lemma tree_itree_iso1 {L A}
+  : itree_to_tree (L:=L) (A:=A) \o tree_to_itree =e id.
+Proof.
+  Opaque to_tree_rec cata rana.
+  intros x; unfold tree_to_itree, itree_to_tree.
+  induction x as [[[|n] kx] Ih]; rewrite cata_unfold, rana_unfold; simpl in *;
+    split; trivial.
+  - intros e; apply (dom_leaf _ e).
+  - intros [[|] V1] [v2 V2]; simpl; intros <-.
+    + rewrite (bool_irrelevance V2 (lnode_valid eq_refl)); trivial.
+    + rewrite (bool_irrelevance V2 (rnode_valid eq_refl)); trivial.
+  Transparent to_tree_rec cata rana.
 Qed.
 
 (* For some reason [Tree] needs unfolding ... *)
 Lemma tree_itree_iso2 {L A}
   : tree_to_itree \o itree_to_tree =e id (A:=itree L A).
-  unfold tree_to_itree, itree_to_tree, Tree. rewrite cata_ana_hylo.
-  symmetry. rewrite hylo_uniq, fmap_id, idKr. intros[]; simpl; trivial.
+Proof.
+  unfold tree_to_itree, itree_to_tree, Tree; rewrite cata_ana_hylo.
+  symmetry; rewrite hylo_uniq, fmap_id, idKr; intros []; simpl; trivial.
 Qed.

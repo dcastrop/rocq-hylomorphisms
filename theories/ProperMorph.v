@@ -28,13 +28,18 @@ Class Terminates `{F : Cont Sh P} `{eA : setoid A} (c : Coalg F A) : Prop :=
 
 (** A named function [c] can be used where an [RCoalg] is expected, provided
   * [Terminates c] is found by typeclass resolution. Without this default,
-  * Rocq would unfold [c] looking for a canonical [RCoalg] and not terminate. *)
+  * Rocq would unfold [c] looking for a canonical [RCoalg] and not
+  * terminate. *)
 Canonical Structure proper_rcoalg `{F : Cont Sh P} `{eA : setoid A}
   (c : A -> App F A) `{Hc : !Proper (eqRel ==> eqRel) c}
   `{T : !Terminates (proper_morph c)} : RCoalg F A :=
   Rec (coalg := proper_morph c) T.
 Extraction Inline proper_rcoalg.
 
+#[export] Hint Unfold f_out f_nat_eta proper_rcoalg : canonical.
+
+Ltac arewrite_unwrap ::=
+  cbv [reverse_coercion]; autounfold with canonical; cbn [coalg natT].
 
 (** * Finding [Proper] instances automatically *)
 
@@ -60,7 +65,8 @@ Ltac proper_app :=
   let sx := fresh "sx" in let sy := fresh "sy" in
   let kx := fresh "kx" in let ky := fresh "ky" in
   let Es := fresh "Es" in let Ek := fresh "Ek" in
-  intros [sx kx] [sy ky] [Es Ek]; simpl in Es, Ek; subst sy; try destruct sx; try unfold_head; simpl;
+  intros [sx kx] [sy ky] [Es Ek]; simpl in Es, Ek; subst sy;
+  try destruct sx; try unfold_head; simpl;
   repeat (match goal with
           | |- context [match ?s with _ => _ end] => is_var s; destruct s
           end; simpl in * );

@@ -8,8 +8,9 @@ Unset Auto Template Polymorphism.
 
     The quantified [xs], the premises [Hs], and every argument [ai] that is a
     variable are generalized. Writing [Ps] for all of these, [coind CH] leaves
-    a fresh relation [r], the coinduction hypothesis [CH : forall Ps, r a1 .. an],
-    and the goal [forall Ps, pacoN gf r a1 .. an].
+    a fresh relation [r], the coinduction hypothesis
+    [CH : forall Ps, r a1 .. an], and the goal
+    [forall Ps, pacoN gf r a1 .. an].
 
     The goal is generalized with the relation
     [l u1 .. un := forall Y, (forall Ps, Y a1 .. an) -> Y u1 .. un]
@@ -74,7 +75,8 @@ Ltac co_lock K H :=
   | _ => apply H; exact K
   end.
 
-(* Prove [F R] (that is, [forall Ps, R as]) from [H : forall us, l us -> R us]. *)
+(* Prove [F R] (that is, [forall Ps, R as]) from
+   [H : forall us, l us -> R us]. *)
 Ltac co_from F H :=
   hnf;
   let K := fresh "K" in
@@ -83,10 +85,12 @@ Ltac co_from F H :=
 
 (* The goal is [R as], with [Xv := R] and the generalized hypotheses after
    the marker. [cut_tac F T] states [forall us, l us -> Xv us] for the
-   relation [l] built from [F] (with [Y : T]); [acc_tac] applies [pacoN_acc]. *)
+   relation [l] built from [F] (with [Y : T]); [acc_tac] applies
+   [pacoN_acc]. *)
 Ltac co_body Xv cut_tac acc_tac CH :=
   lazymatch goal with
-  | [M : _co_marker |- _] => move Xv after M  (* [Xv] is last: this moves it above [M] *)
+  (* [Xv] is last: this moves it above [M] *)
+  | [M : _co_marker |- _] => move Xv after M
   end;
   co_revert;
   let G := lazymatch goal with [|- ?G] => G end in
@@ -129,7 +133,8 @@ Ltac co_shape2 CH :=
     let Xv := fresh "R" in
     set (Xv := R);
     co_body Xv
-      ltac:(fun F T => cut (forall u1 u2, (forall Y : T, F Y -> Y u1 u2) -> Xv u1 u2))
+      ltac:(fun F T =>
+              cut (forall u1 u2, (forall Y : T, F Y -> Y u1 u2) -> Xv u1 u2))
       ltac:(apply paco2_acc) CH
   end.
 
@@ -141,7 +146,8 @@ Ltac co_shape3 CH :=
     set (Xv := R);
     co_body Xv
       ltac:(fun F T =>
-              cut (forall u1 u2 u3, (forall Y : T, F Y -> Y u1 u2 u3) -> Xv u1 u2 u3))
+              cut (forall u1 u2 u3,
+                      (forall Y : T, F Y -> Y u1 u2 u3) -> Xv u1 u2 u3))
       ltac:(apply paco3_acc) CH
   end.
 
@@ -167,10 +173,12 @@ Ltac co_shape5 CH :=
     co_body Xv
       ltac:(fun F T =>
               cut (forall u1 u2 u3 u4 u5,
-                      (forall Y : T, F Y -> Y u1 u2 u3 u4 u5) -> Xv u1 u2 u3 u4 u5))
+                      (forall Y : T, F Y -> Y u1 u2 u3 u4 u5) ->
+                      Xv u1 u2 u3 u4 u5))
       ltac:(apply paco5_acc) CH
   end.
 
 Ltac coind CH :=
   co_move;
-  first [ co_shape1 CH | co_shape2 CH | co_shape3 CH | co_shape4 CH | co_shape5 CH ].
+  first [ co_shape1 CH | co_shape2 CH | co_shape3 CH | co_shape4 CH
+        | co_shape5 CH ].

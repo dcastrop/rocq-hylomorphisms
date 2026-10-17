@@ -7,7 +7,6 @@ Require Import Hylo.Utils.
 
 From Stdlib Require List.
 
-(* Defining a tree *)
 Unset Auto Template Polymorphism.
 
 Inductive IListF H T := i_nil | i_cons (h : H) (t : T).
@@ -34,7 +33,10 @@ Definition List H := LFix (ListF H).
 (* A named morphism, not a plain function: it is the key of the canonical
    [naturalM] structure [natural_list] below. *)
 Definition l_map_shape {H H'} (f : H ~> H') : Lshape H ~> Lshape H' :=
-  morph_of (fun x => match x with s_nil => s_nil | s_cons h => s_cons (f h) end).
+  morph_of (fun x => match x with
+                     | s_nil => s_nil
+                     | s_cons h => s_cons (f h)
+                     end).
 
 Lemma map_shape_is_nt {H H'} (f : H ~> H')
   : NaturalIn (ListF H) (ListF H') (l_map_shape f).
@@ -43,12 +45,12 @@ Proof. intros [|n] p; trivial. Qed.
 Canonical Structure natural_list {H H'} (f : H ~> H')
   : naturalM (ListF H) (ListF H')
   := {| natT := l_map_shape f; natC := @map_shape_is_nt _ _ f |}.
+#[export] Hint Unfold natural_list : canonical.
 
 Lemma dom_nil_false H : Pos (ListF H) (@s_nil H) -> False.
-Proof. intros []. simpl in *. discriminate. Qed.
+Proof. intros []; simpl in *; discriminate. Qed.
 Lemma nil_uninhabited {H B} (x : Pos (ListF H) (@s_nil H)) : B x.
-  apply (False_rect _ (dom_nil_false x)).
-Defined.
+Proof. apply (False_rect _ (dom_nil_false x)). Defined.
 Hint Extern 0 => (apply nil_uninhabited) : ffix.
 
 Abbreviation a_nil := (MkCont (@s_nil _) (@nil_uninhabited _ _)).
@@ -61,7 +63,7 @@ Local Definition a_in {H X : Type} (x : IListF H X) : App (ListF H) X :=
   end.
 
 Lemma p_cons {H s} {h : H} : s = s_cons h -> valid(s, tt).
-Proof. intros->. reflexivity. Qed.
+Proof. intros ->; reflexivity. Qed.
 
 Abbreviation get_tail k E := (k (MkElem tt (p_cons E))).
 
@@ -72,12 +74,13 @@ Local Definition a_out {H X : Type} (x : App (ListF H) X) : IListF H X :=
   | s_cons h => fun E => i_cons h (get_tail k E)
   end eq_refl.
 
-Definition ilist_alg {A} (x : App (ListF A) (list A)) : list A :=
-  let (s, k) := x in
-  match s as s' return s = s' -> list A with
-  | s_nil => fun _ => nil
-  | s_cons h => fun E => cons h (get_tail k E)
-  end eq_refl.
+Definition ilist_alg {A} : App (ListF A) (list A) ~> list A :=
+  morph_of (fun x : App (ListF A) (list A) =>
+    let (s, k) := x in
+    match s as s' return s = s' -> list A with
+    | s_nil => fun _ => nil
+    | s_cons h => fun E => cons h (get_tail k E)
+    end eq_refl).
 
 Definition ilist_coalg {A} (x : list A) : App (ListF A) (list A) :=
   match x with
@@ -88,29 +91,29 @@ Arguments ilist_coalg {A} x /.
 Lemma ilist_coalg_rec {A} : RecP (@ilist_coalg A).
 Proof. intros x; induction x; constructor; auto with ffix. Qed.
 
-#[export] Instance ilist_coalg_terminates {A} : Terminates (@ilist_coalg A) := ilist_coalg_rec.
+#[export] Instance ilist_coalg_terminates {A} : Terminates (@ilist_coalg A)
+  := ilist_coalg_rec.
 
 Definition ilist_to_List {A} : list A ~> List A := rana ilist_coalg.
 Definition List_to_ilist {A} : List A ~> list A := cata ilist_alg.
 
 Lemma ilist_List_iso1 {A} : @ilist_to_List A \o List_to_ilist =e id.
 Proof.
-  unfold ilist_to_List, List_to_ilist, List. intros x.
+  unfold ilist_to_List, List_to_ilist, List; intros x.
   Opaque eqRel rana cata LFixR.
   induction x as [[[|h] kx] Ih];
     rewrite rana_unfold, cata_unfold; simpl in *; constructor; auto with ffix.
-  - simpl in *. intros e1. destruct (dom_nil_false e1).
-  - simpl in *. intros [[] V1] [[] V2] E. simpl in *.
-    rewrite (bool_irrelevance V2 (p_cons (@eq_refl _ (s_cons h)))).
-    apply Ih.
-    Transparent eqRel rana cata LFixR.
+  - intros e1; destruct (dom_nil_false e1).
+  - intros [[] V1] [[] V2] E; simpl in *.
+    rewrite (bool_irrelevance V2 (p_cons (@eq_refl _ (s_cons h)))); apply Ih.
+  Transparent eqRel rana cata LFixR.
 Qed.
 
 Lemma ilist_List_iso {A} : @List_to_ilist A \o ilist_to_List =e id.
 Proof.
   unfold ilist_to_List, List_to_ilist, List.
-  rewrite cata_ana_hylo. symmetry. apply hylo_uniq.
-  rewrite fmap_id, idKr. intros [|h t]; auto with ffix.
+  rewrite cata_ana_hylo; symmetry; apply hylo_uniq.
+  rewrite fmap_id, idKr; intros [|h t]; auto with ffix.
 Qed.
 
 Definition Lmap {A B} (f : A ~> B) : List A ~> List B :=
@@ -123,7 +126,7 @@ Lemma ifmap_fmap {A B} (f : A ~> B) :
   ilist_coalg (A:=B) \o ILmap f
   =e natural (natural_list f) \o fmap (ILmap f) \o ilist_coalg.
 Proof.
-  intros []; simpl in *; auto with ffix. constructor; simpl; auto with ffix.
+  intros []; simpl in *; auto with ffix; constructor; simpl; auto with ffix.
   intros e; destruct (dom_nil_false e).
 Qed.
 
@@ -132,30 +135,29 @@ Lemma fmap_ifmap {A B} (f : A ~> B) :
   =e ilist_alg \o natural (natural_list f) \o fmap (ILmap f).
 Proof.
   intros [[|h] k]; simpl in *; auto with ffix.
-  rewrite (bool_irrelevance (map_shape_is_nt _) (p_cons eq_refl)).
-  reflexivity.
+  rewrite (bool_irrelevance (map_shape_is_nt _) (p_cons eq_refl));
+    reflexivity.
 Qed.
 
 Lemma list_map_nat {A B} (f : A ~> B) :
   Lmap f \o ilist_to_List =e ilist_to_List \o ILmap (app f).
 Proof.
   unfold ilist_to_List, List, Lmap, everywhere.
-  rewrite <- hylo_cata, cata_ana_hylo, hylo_ana. symmetry.
-  apply hylo_uniq. rewrite hylo_unr at 1. rewrite <- !compA.
-  rewrite ifmap_fmap, <- !compA. rewrite (compA (fmap _)).
-  unfold natural. rewrite <- eta_is_natural. rewrite <- !compA.
-  rewrite (compA (fmap _)), <- fmap_comp, !compA.
-  reflexivity.
+  rewrite <- hylo_cata, cata_ana_hylo, hylo_ana; symmetry.
+  apply hylo_uniq; rewrite hylo_unr at 1.
+  arewrite (ifmap_fmap f).
+  arewrite <- (natural_fmap (natural_list f) (hylo l_in (ilist_coalg (A:=B)))).
+  rewrite fmap_comp; assoc_r; reflexivity.
 Qed.
 
 Lemma list_ww2 {A B} (f : A ~> B) :
-  List_to_ilist \o Lmap f  =e ILmap f \o List_to_ilist.
+  List_to_ilist \o Lmap f =e ILmap f \o List_to_ilist.
 Proof.
   unfold List_to_ilist, Lmap, List, everywhere.
-  rewrite hylo_map_shift, <- hylo_ana,cata_ana_hylo, hylo_cata. symmetry.
-  apply hylo_uniq. rewrite <- !compA.
-  rewrite (compA _ (natural (natural_list f)) l_out).
-  rewrite <- natural_fmap, fmap_comp, !compA.
-  rewrite <- fmap_ifmap. rewrite <- !compA.
-  rewrite (compA ilist_alg _ l_out). rewrite hylo_unr at 1. reflexivity.
+  rewrite hylo_map_shift, <- hylo_ana, cata_ana_hylo, hylo_cata; symmetry.
+  apply hylo_uniq; rewrite fmap_comp.
+  arewrite <- (natural_fmap (natural_list f) (hylo (@ilist_alg A) l_out)).
+  arewrite <- (natural_fmap (natural_list f) (ILmap f)).
+  arewrite <- (fmap_ifmap f); arewrite <- (hylo_unr (@ilist_alg A) l_out).
+  reflexivity.
 Qed.

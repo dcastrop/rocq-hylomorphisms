@@ -11,12 +11,13 @@ Require Import Hylo.Examples.BTree.
 From Stdlib Require Import List.
 From Stdlib Require Import Uint63.
 
-Definition merge (x : App (TreeF unit int) (list int)) : list int :=
-  let (sx, kx) := x in
-  match sx return (Container.Pos (TreeF unit int) sx -> _) -> _ with
-  | Leaf _ _ => fun _ => nil
-  | Node _ h => fun k => List.app (k (posL h)) (h :: k (posR h))
-  end kx.
+Definition merge : App (TreeF unit int) (list int) ~> list int :=
+  morph_of (fun x : App (TreeF unit int) (list int) =>
+    let (sx, kx) := x in
+    match sx return (Container.Pos (TreeF unit int) sx -> _) -> _ with
+    | Leaf _ _ => fun _ => nil
+    | Node _ h => fun k => List.app (k (posL h)) (h :: k (posR h))
+    end kx).
 
 Open Scope uint63_scope.
 Definition c_split (x : list int) : App (TreeF unit int) (list int) :=
@@ -32,8 +33,8 @@ Close Scope uint63_scope.
 Lemma split_fin : respects_relation c_split (@length int) lt.
 Proof.
   intros [|h t] p; simpl in *; try (apply (dom_leaf _ p)).
-  rewrite PeanoNat.Nat.lt_succ_r. revert p. rewrite List.partition_as_filter.
-  intros []; simpl in *. destruct val; apply List.filter_length_le.
+  rewrite PeanoNat.Nat.lt_succ_r; revert p; rewrite List.partition_as_filter.
+  intros []; simpl in *; destruct val; apply List.filter_length_le.
 Qed.
 
 Definition tsplit : RCoalg (TreeF unit int) (list int)
@@ -48,16 +49,13 @@ Lemma Lmap_merge (f : int ~> int)
   : Lmap f \o merge =e merge \o natural (nt_shape id f) \o fmap (Lmap f).
 Proof.
   intros [[n|n] kx]; simpl in *; auto with *.
-  unfold Lmap. rewrite map_app; simpl. unfold posL, posR.
-  eq_args.
+  unfold Lmap, posL, posR; rewrite map_app; simpl; eq_args.
 Qed.
 
 Definition qsort : Ext (cata merge \o rana tsplit).
-  calculate.
-  (* rewrite <- ana_rana. *)
-  (* rewrite compA, cata_ccata. *)
-  rewrite cata_ana_hylo.
-  Opaque wf_lt. simpl. Transparent wf_lt.
+Proof.
+  calculate; rewrite cata_ana_hylo.
+  with_strategy opaque [wf_lt] simpl.
   reflexivity.
 Defined.
 
@@ -68,18 +66,15 @@ Close Scope uint63_scope.
 
 Definition qsort_times_two
   : Ext (Lmap times_two \o cata merge \o rana tsplit).
+Proof.
   calculate.
   assert (RW1 : Lmap times_two \o cata merge
                 =e hylo (merge \o natural (nt_shape id times_two)) l_out).
-  {
-    apply hylo_uniq.
-    rewrite fmap_comp, <- !compA. rewrite compA, compA.
-    rewrite <- Lmap_merge, <- !compA, (compA merge), <- cata_unfold.
-    reflexivity.
-  }
-  rewrite RW1, hylo_ana. rewrite deforest.
-  2:{ apply l_out_in. }
-  Opaque wf_lt. simpl. Transparent wf_lt.
+  { apply hylo_uniq.
+    rewrite fmap_comp; arewrite <- (Lmap_merge times_two).
+    arewrite <- (cata_unfold merge); reflexivity. }
+  rewrite RW1, hylo_ana, deforest by apply l_out_in.
+  with_strategy opaque [wf_lt] simpl.
   reflexivity.
 Defined.
 
@@ -99,48 +94,46 @@ Module Tests.
 End Tests.
 
 Section QSortOK.
-Inductive Sorted {A : Type} (R : A -> A -> bool) : list A -> Prop :=
+  Inductive Sorted {A : Type} (R : A -> A -> bool) : list A -> Prop :=
   | Sorted_nil : Sorted R nil
-  | Sorted_cons {a} {v : list A} : All (R a) v -> Sorted R v -> Sorted R (a :: v).
+  | Sorted_cons {a} {v : list A}
+    : All (R a) v -> Sorted R v -> Sorted R (a :: v).
 
-  Definition Permutation {A : Type} (l r : list A) := forall x, In x l <-> In x r.
+  Definition Permutation {A : Type} (l r : list A) :=
+    forall x, In x l <-> In x r.
 
   Definition leb x y : bool := (x <=? y)%uint63.
 
   Lemma sorted_app p :
     forall l r,
       Sorted leb l -> Sorted leb r ->
-      All (fun x => x <? p)%uint63 l -> All (fun x => negb (x <? p))%uint63 r ->
+      All (fun x => x <? p)%uint63 l ->
+      All (fun x => negb (x <? p))%uint63 r ->
       Sorted leb (l ++ r).
   Proof.
     induction l as [|h t Ih]; simpl; auto.
-    intros r Sh Sr A B. inversion_clear Sh as [|h' t' Aleb Sl].
-    constructor.
-    + intros x H. apply in_app_or in H. destruct H; auto.
-      specialize (B _ H); simpl in *.
-      specialize (A h (or_introl eq_refl)). simpl in A.
-      clear H Sl Aleb Sr Ih. unfold leb. apply negb_lt_le in B.
-      apply lt_le in A; apply (leb_trans A B).
-    + apply Ih; auto. intros x e.
-      apply (A _ (or_intror e)).
+    intros r Sh Sr A B; inversion_clear Sh as [|h' t' Aleb Sl]; constructor.
+    + intros x H; apply in_app_or in H; destruct H; auto.
+      specialize (B _ H); specialize (A h (or_introl eq_refl)); simpl in *.
+      apply negb_lt_le in B; apply lt_le in A; apply (leb_trans A B).
+    + apply Ih; auto; intros x e; apply (A _ (or_intror e)).
   Qed.
-
 
   Lemma hylo_ind `{eA : setoid A} `{eB : setoid B} `{F : Cont Sh Pp}
     (P : A -> B -> Prop)
     : forall (a : Alg F B) (c : RCoalg F A),
-      (forall x (Ih : forall e, P (cont (c x) e) (hylo a c (cont (c x) e))), P x (hylo a c x)) ->
+      (forall x (Ih : forall e, P (cont (c x) e) (hylo a c (cont (c x) e))),
+          P x (hylo a c x)) ->
       forall x, P x (hylo a c x).
   Proof.
-    intros a c H x. induction (recP c x) as [x _ Ih]. apply H, Ih.
+    intros a c H x; induction (recP c x) as [x _ Ih]; apply H, Ih.
   Qed.
 
   Lemma hylo_correct : forall (l : list int),
       Sorted leb (hylo merge tsplit l) /\ Permutation l (hylo merge tsplit l).
   Proof.
     Opaque hylo.
-    intros l.
-    induction (recP tsplit l) as [x _ Ih]. rewrite hylo_unr; simpl.
+    intros l; induction (recP tsplit l) as [x _ Ih]; rewrite hylo_unr; simpl.
     destruct x as [|h t]; simpl in *.
     + repeat constructor; trivial.
     + rewrite partition_as_filter in *; simpl in *.
@@ -170,5 +163,5 @@ Inductive Sorted {A : Type} (R : A -> A -> bool) : list A -> Prop :=
           subst. left; trivial.
           right. rewrite <- (IhPr x), filter_In in inR. destruct inR; trivial.
     Transparent hylo.
-    Qed.
+  Qed.
 End QSortOK.
