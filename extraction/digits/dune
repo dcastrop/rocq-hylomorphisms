@@ -1,0 +1,20 @@
+; Extracts digits.ml (in _build/default/extraction/digits/) and compiles it, so that
+; broken extraction is caught by the build. Uint63 comes from the Rocq kernel.
+
+(rocq.extraction
+ (prelude ExtrDigits)
+ (extracted_modules digits)
+ (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction)
+ (flags :standard -w -extraction-default-directory))
+
+(library
+ (name extracted_digits)
+ (wrapped false)
+ (modules digits)
+ (libraries rocq-runtime.kernel)
+ (flags :standard -w -a))
+
+(executable
+ (name main)
+ (modules main)
+ (libraries extracted_digits))

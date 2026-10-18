@@ -9,6 +9,12 @@
 
 (library
  (name extracted_qsort)
+ (wrapped false)
  (modules qsort)
  (libraries rocq-runtime.kernel)
  (flags :standard -w -a))
+
+(executable
+ (name main)
+ (modules main)
+ (libraries extracted_qsort))

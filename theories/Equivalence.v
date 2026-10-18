@@ -44,6 +44,13 @@ Create HintDb ffix.
 #[export] Hint Resolve e_sym : ffix.
 #[export] Hint Resolve e_trans : ffix.
 
+(** Prove [x =e y] by [x = y]: then [f_equal] and [reflexivity] apply. *)
+Lemma eq_eqRel `{setoid A} (x y : A) : x = y -> x =e y.
+Proof. intros ->; reflexivity. Qed.
+
+Ltac to_eq :=
+  lazymatch goal with |- ?R ?x ?y => change (x =e y); apply eq_eqRel end.
+
 Definition def_eq A : setoid A :=
 {| eqRel := @eq A;
   e_refl := @eq_refl A;
@@ -109,12 +116,68 @@ Proof.
     eauto with ffix.
 Defined.
 
+Fixpoint list_eqR `{setoid A} (x y : list A) : Prop :=
+  match x, y with
+  | nil, nil => True
+  | a :: x, b :: y => a =e b /\ list_eqR x y
+  | _, _ => False
+  end%list.
+
+Ltac destruct_list_match :=
+  match goal with
+  | |- context [match ?l with nil => _ | cons _ _ => _ end] => is_var l; destruct l
+  | H : context [match ?l with nil => _ | cons _ _ => _ end] |- _ => is_var l; destruct l
+  end.
+
+#[local] Hint Extern 4 =>
+  progress (simpl in *); intuition (eauto with ffix) : ffix.
+#[local] Hint Extern 5 =>
+  destruct_list_match; simpl in *; intuition (eauto with ffix) : ffix.
+
+#[export] Program Instance list_eq `{eA : setoid A} : setoid (list A)
+  := { eqRel := list_eqR }.
+Solve All Obligations with (induction x; eauto with ffix).
+
+#[export] Hint Extern 1 (list_eqR ?x ?y) => change (x =e y) : ffix.
+
+Add Parametric Relation `{eA : setoid A} : (list A) (@list_eqR A eA)
+    reflexivity proved by (@e_refl (list A) list_eq)
+    symmetry proved by (@e_sym (list A) list_eq)
+    transitivity proved by (@e_trans (list A) list_eq)
+      as ListEq.
+
+(** Types whose equivalence implies [=]. *)
+#[mode = "! -"]
+Class Leibniz T `{setoid T} : Prop := leibniz : forall x y : T, x =e y -> x = y.
+Arguments Leibniz T {_}.
+
+Lemma eq_leibniz `{Leibniz T} (x y : T) : x = y -> x =e y.
+Proof. intros ->; reflexivity. Qed.
+
+Lemma def_eq_leibniz T : @Leibniz T (def_eq T).
+Proof. intros x y E; exact E. Qed.
+
+(* As for [def_eq_fallback]: only for types without a setoid of their own. *)
+#[export] Hint Extern 100 (@Leibniz ?T _) =>
+  tryif assert_succeeds (let x := constr:(_ : NoDefEq T) in idtac) then fail
+  else exact (@def_eq_leibniz T) : typeclass_instances.
+
+#[export] Instance pair_leibniz `{Leibniz A} `{Leibniz B} : Leibniz (A * B).
+Proof. intros [] [] []; f_equal; apply leibniz; trivial. Qed.
+
+#[export] Instance list_leibniz `{Leibniz A} : Leibniz (list A).
+Proof.
+  intros x; induction x; intros [] E; simpl in *; try contradiction; trivial.
+  destruct E; f_equal; auto.
+Qed.
+
 #[export] Instance ext_no_def_eq A B : NoDefEq (A -> B) := {}.
 #[export] Instance pair_no_def_eq A B : NoDefEq (A * B) := {}.
 #[export] Instance sum_no_def_eq A B : NoDefEq (A + B) := {}.
 #[export] Instance prop_no_def_eq : NoDefEq Prop := {}.
 #[export] Instance sig_no_def_eq A (P : A -> Prop)
   : NoDefEq {a : A | P a} := {}.
+#[export] Instance list_no_def_eq A : NoDefEq (list A) := {}.
 
 #[mode = "-"]
 Class equivs (A : list Type) : Prop.

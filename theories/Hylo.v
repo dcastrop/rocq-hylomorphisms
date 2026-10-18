@@ -9,3 +9,5 @@ Require Export Hylo.Coalgebra.
 Require Export Hylo.FCoalgebra.
 Require Export Hylo.Hylomorphisms.
 Require Export Hylo.ProperMorph.
+
+From Stdlib Require Export Derive.

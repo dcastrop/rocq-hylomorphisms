@@ -43,7 +43,7 @@ Definition tsplit : RCoalg (TreeF unit int) (list int)
 Definition Lmap {A B} (f : A ~> B) (x : list A) : list B := List.map f x.
 
 Ltac eq_args :=
-  repeat (f_equal; auto with ffix; try apply bool_irrelevance).
+  try to_eq; repeat (f_equal; auto with ffix; try apply bool_irrelevance).
 
 Lemma Lmap_merge (f : int ~> int)
   : Lmap f \o merge =e merge \o natural (nt_shape id f) \o fmap (Lmap f).
@@ -52,31 +52,33 @@ Proof.
   unfold Lmap, posL, posR; rewrite map_app; simpl; eq_args.
 Qed.
 
-Definition qsort : Ext (cata merge \o rana tsplit).
+Derive qsort in (cata merge \o rana tsplit =e qsort) as qsort_calc.
 Proof.
-  calculate; rewrite cata_ana_hylo.
-  with_strategy opaque [wf_lt] simpl.
-  reflexivity.
-Defined.
+  rewrite cata_ana_hylo.
+  finished.
+Qed.
 
 Open Scope uint63_scope.
 Definition times_two (x : int) : int := 2 * x.
 Arguments times_two x /.
 Close Scope uint63_scope.
 
-Definition qsort_times_two
-  : Ext (Lmap times_two \o cata merge \o rana tsplit).
+Lemma map_merge_fusion
+  : Lmap times_two \o cata merge
+    =e hylo (merge \o natural (nt_shape id times_two)) l_out.
 Proof.
-  calculate.
-  assert (RW1 : Lmap times_two \o cata merge
-                =e hylo (merge \o natural (nt_shape id times_two)) l_out).
-  { apply hylo_uniq.
-    rewrite fmap_comp; arewrite <- (Lmap_merge times_two).
-    arewrite <- (cata_unfold merge); reflexivity. }
-  rewrite RW1, hylo_ana, deforest by apply l_out_in.
-  with_strategy opaque [wf_lt] simpl.
-  reflexivity.
-Defined.
+  apply hylo_uniq.
+  rewrite fmap_comp; arewrite <- (Lmap_merge times_two).
+  arewrite <- (cata_unfold merge); reflexivity.
+Qed.
+
+Derive qsort_times_two
+  in (Lmap times_two \o cata merge \o rana tsplit =e qsort_times_two)
+  as qsort_times_two_calc.
+Proof.
+  rewrite map_merge_fusion, hylo_ana, deforest by apply l_out_in.
+  finished.
+Qed.
 
 Module Tests.
   Import List.

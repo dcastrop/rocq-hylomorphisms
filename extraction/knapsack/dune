@@ -9,6 +9,12 @@
 
 (library
  (name extracted_knapsack)
+ (wrapped false)
  (modules knapsack)
  (libraries rocq-runtime.kernel)
  (flags :standard -w -a))
+
+(executable
+ (name main)
+ (modules main)
+ (libraries extracted_knapsack))

@@ -424,6 +424,13 @@ Definition uncurry `{setoid A} `{setoid B} `{setoid C} (f : A ~> B ~> C)
 Definition curry `{setoid A} `{setoid B} `{setoid C} (f : A * B ~> C)
   : A ~> B ~> C := comp f \o papp pair id \o const.
 
+Program Definition lapp `{setoid A} : list A ~> list A ~> list A :=
+  @MkMorph _ _ _ _ (fun l1 => @MkMorph _ _ _ _ (fun l2 => (l1 ++ l2)%list) _) _.
+Next Obligation. induction l1; simpl; intuition (auto with ffix). Qed.
+Next Obligation.
+  revert y H0; induction x; intros [] E; simpl in *; intuition (auto with ffix).
+Qed.
+
 Section SpecDef.
   Context `{eA : setoid A} `{eB : setoid B}.
   Record Ext (f : A ~> B) :=
@@ -433,7 +440,10 @@ Section SpecDef.
       }.
 End SpecDef.
 
-Ltac calculate := eapply MkExt.
+(** Calculations use [Derive f in (spec =e f) as f_calc]: rewrite [spec] step
+  * by step, then [finished] instantiates [f] with the result. [f] is
+  * transparent and [f_calc] opaque. *)
+Ltac finished := lazymatch goal with |- _ =e ?f => subst f end; reflexivity.
 
 Section PredSubty.
   Context `{eA : setoid A} `{eB : setoid B}.

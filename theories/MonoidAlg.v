@@ -30,23 +30,70 @@ Record Monoid `{eW : setoid W} :=
     }.
 Arguments Monoid W {_}.
 
+(** * Notation
+
+  * [a <+> b] and [<0>] use the only monoid on the carrier in the context; they
+  * fail if there are several, and then [a <+>[ M ] b] and [<0>[ M ]] name it.
+  * [MonoidOf] is never the type of a hypothesis, so its only instances come
+  * from [unique_monoid]. A concrete monoid is opened with
+  * [#[local] Hint Extern 0 (@MonoidOf T _) => exact M : typeclass_instances]. *)
+
+#[mode = "! -"]
+Class MonoidOf W `{setoid W} := monoid_of : Monoid W.
+Arguments MonoidOf W {_}.
+
+Ltac unique_monoid W :=
+  match goal with
+  | M1 : @Monoid W _, M2 : @Monoid W _ |- _ =>
+      tryif constr_eq M1 M2 then fail else fail 1
+  | M : @Monoid W _ |- _ => exact M
+  end.
+#[export] Hint Extern 0 (@MonoidOf ?W _) => unique_monoid W
+  : typeclass_instances.
+
+Notation "a <+>[ M ] b" := (par M a b)
+  (at level 50, M at level 0, left associativity, only parsing).
+Notation "<0>[ M ]" := (skip M) (M at level 0, only parsing).
+Notation "a <+> b" := (par (_ : MonoidOf _) a b)
+  (at level 50, left associativity, only parsing).
+Notation "a <+> b" := (par _ a b)
+  (at level 50, left associativity, only printing).
+Notation "<0>" := (skip (_ : MonoidOf _)) (only parsing).
+Notation "<0>" := (skip _) (only printing).
+
 Record MonoidHom `{eW : setoid W} `{eV : setoid V}
   (M : Monoid W) (N : Monoid V) (h : W ~> V) : Prop :=
-  { hom_skip : h (skip M) =e skip N;
-    hom_par : forall a b, h (par M a b) =e par N (h a) (h b);
+  { hom_skip : h <0>[M] =e <0>[N];
+    hom_par : forall a b, h (a <+>[M] b) =e h a <+>[N] h b;
   }.
 
+(** * Semirings: [mul] distributes over [add] on the left, and [add]'s unit
+  * absorbs on the right. *)
+Record Semiring `{eW : setoid W} :=
+  MkSemiring
+    { sadd : Monoid W;
+      smul : Monoid W;
+      sdistr : forall x a b,
+        x <+>[smul] (a <+>[sadd] b) =e (x <+>[smul] a) <+>[sadd] (x <+>[smul] b);
+      sabsorb : forall x, x <+>[smul] <0>[sadd] =e <0>[sadd];
+    }.
+Arguments Semiring W {_}.
+
+Lemma smul_hom `{setoid W} (S : Semiring W) (x : W)
+  : MonoidHom (sadd S) (sadd S) (par (smul S) x).
+Proof. split; [apply sabsorb | apply sdistr]. Qed.
+
 Section MConcat.
-  Context `{eW : setoid W} (M : Monoid W).
+  Context `(M : @Monoid W eW).
 
   (** Fold a list with [par], adding no units: [mconcat [x] = x]. *)
   Fixpoint mconcat (l : list W) : W :=
     match l with
-    | nil => skip M
+    | nil => <0>
     | x :: l' =>
         match l' with
         | nil => x
-        | _ :: _ => par M x (mconcat l')
+        | _ :: _ => x <+> mconcat l'
         end
     end.
 
@@ -67,6 +114,14 @@ Proof.
   rewrite (hom_par Hh), Ih; reflexivity.
 Qed.
 
+Section ListMonoid.
+  Context `{setoid A}.
+  Program Definition list_monoid : Monoid (list A) :=
+    {| skip := nil; par := lapp |}.
+  Solve All Obligations with
+    (intros; simpl; rewrite ?app_assoc, ?app_nil_r; eauto with ffix).
+End ListMonoid.
+
 (** * Optional values *)
 
 #[export] Instance option_eq `{eA : setoid A} : setoid (option A).
@@ -80,6 +135,12 @@ Proof.
     contradiction.
 Defined.
 #[export] Instance option_no_def_eq A : NoDefEq (option A) := {}.
+
+#[export] Instance option_leibniz `{Leibniz A} : Leibniz (option A).
+Proof.
+  intros [x|] [y|] E; simpl in *; try contradiction; trivial.
+  f_equal; apply leibniz, E.
+Qed.
 
 Section OMap.
   Context `{eA : setoid A} `{eB : setoid B}.

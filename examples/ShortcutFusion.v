@@ -70,15 +70,17 @@ Definition len_alg {A} : App (ListF A) int ~> int :=
 
 Definition length {A} := cata (@len_alg A).
 
-Definition example1 {A B} (f : A ~> B) ys
-  : Ext (length \o Lmap f \o append ys).
-Proof.
-  calculate.
-  unfold length, Lmap, append, everywhere.
-  rewrite !hylo_cata, hylo_map_fusion.
-  rewrite <- tau_fusion. simpl. reflexivity.
-  apply l_out_in.
-Defined.
+Section Example1.
+  Context {A B : Type} (f : A ~> B) (ys : list A).
+
+  Derive example1 in (length \o Lmap f \o append ys =e example1) as example1_calc.
+  Proof.
+    unfold length, Lmap, append, everywhere.
+    rewrite !hylo_cata, hylo_map_fusion.
+    rewrite <- tau_fusion by apply l_out_in.
+    finished.
+  Qed.
+End Example1.
 
 (** Example 2 from shortcut fusion in calc form [length \o rev ] *)
 
@@ -111,12 +113,10 @@ Defined.
 Definition reverse {A} : list A ~> list A
   := hylo (rev_alg ilist_alg) ilist_coalg.
 
-Definition example2 {A} : Ext (hylo len_alg ilist_coalg \o @reverse A).
+Lemma length_rev_alg {A}
+  : hylo len_alg ilist_coalg \o rev_alg (A:=A) ilist_alg
+    =e len_alg \o fmap (hylo len_alg ilist_coalg).
 Proof.
-  calculate.
-  unfold reverse.
-  rewrite hylo_fusion_l with (g2 := len_alg).
-  2:{
     Opaque hylo.
     intros x.
     destruct x as [[|h] kx].
@@ -136,14 +136,19 @@ Proof.
       + intros e. destruct (dom_nil_false e).
       + intros [[] V1] [[] V2] _; simpl in *.
         rewrite (bool_irrelevance (p_cons eq_refl) V2); reflexivity.
-  }
   Transparent hylo.
-  unfold len_alg. simpl.
-  reflexivity.
-Defined.
+Qed.
 
-Module ToExtract.
-  Definition ex1 := Eval unfold example1 in @example1.
-  Definition ex2 := Eval unfold example2 in @example2.
-End ToExtract.
+Section Example2.
+  Context {A : Type}.
+
+  Derive example2 in (hylo len_alg ilist_coalg \o @reverse A =e example2)
+    as example2_calc.
+  Proof.
+    unfold reverse.
+    rewrite hylo_fusion_l with (g2 := len_alg) by apply length_rev_alg.
+    finished.
+  Qed.
+End Example2.
+
 

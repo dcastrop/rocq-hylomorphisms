@@ -1,0 +1,20 @@
+; Extracts mss.ml (in _build/default/extraction/mss/) and compiles it, so that
+; broken extraction is caught by the build. Z is extracted to Zarith (Bigint).
+
+(rocq.extraction
+ (prelude ExtrMSS)
+ (extracted_modules mss)
+ (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction)
+ (flags :standard -w -extraction-default-directory))
+
+(library
+ (name extracted_mss)
+ (wrapped false)
+ (modules mss)
+ (libraries rocq-runtime.kernel bigint)
+ (flags :standard -w -a))
+
+(executable
+ (name main)
+ (modules main)
+ (libraries extracted_mss bigint))

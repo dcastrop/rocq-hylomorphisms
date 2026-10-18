@@ -9,6 +9,12 @@
 
 (library
  (name extracted_shortcutfusion)
+ (wrapped false)
  (modules shortcutfusion)
  (libraries rocq-runtime.kernel)
  (flags :standard -w -a))
+
+(executable
+ (name main)
+ (modules main)
+ (libraries extracted_shortcutfusion))

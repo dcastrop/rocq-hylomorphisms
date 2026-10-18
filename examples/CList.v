@@ -4,6 +4,7 @@ Unset Strict Implicit.
 
 From Hylo Require Import Hylo.
 Require Import Hylo.Utils.
+Require Import Hylo.FiniteCont.
 
 From Stdlib Require List.
 
@@ -67,6 +68,21 @@ Proof. intros ->; reflexivity. Qed.
 
 Abbreviation get_tail k E := (k (MkElem tt (p_cons E))).
 
+Definition l_members {H} (s : Lshape H) : list (Pos (ListF H) s) :=
+  match s as s return list (Pos (ListF H) s) with
+  | s_nil => nil
+  | s_cons _ => MkElem tt (p_cons eq_refl) :: nil
+  end.
+
+#[export] Instance ListF_finite {H} : Finite (ListF H).
+Proof.
+  refine {| members := l_members |}.
+  - intros s1 s2 ->; reflexivity.
+  - intros [|h] [[] V]; simpl; [discriminate V |].
+    left; f_equal; apply bool_irrelevance.
+  - intros [|h]; repeat constructor; simpl; auto.
+Defined.
+
 Local Definition a_out {H X : Type} (x : App (ListF H) X) : IListF H X :=
   let (s, k) := x in
   match s as s' return s = s' -> IListF H X with
@@ -88,11 +104,11 @@ Definition ilist_coalg {A} (x : list A) : App (ListF A) (list A) :=
   | cons h t => a_cons h t
   end.
 Arguments ilist_coalg {A} x /.
-Lemma ilist_coalg_rec {A} : RecP (@ilist_coalg A).
-Proof. intros x; induction x; constructor; auto with ffix. Qed.
+Lemma ilist_coalg_rec `{Leibniz A} : RecP (@ilist_coalg A).
+Proof. intros x; induction x; constructor; auto with ffix. Defined.
 
-#[export] Instance ilist_coalg_terminates {A} : Terminates (@ilist_coalg A)
-  := ilist_coalg_rec.
+#[export] Instance ilist_coalg_terminates `{Leibniz A}
+  : Terminates (@ilist_coalg A) := ilist_coalg_rec.
 
 Definition ilist_to_List {A} : list A ~> List A := rana ilist_coalg.
 Definition List_to_ilist {A} : List A ~> list A := cata ilist_alg.
@@ -136,7 +152,7 @@ Lemma fmap_ifmap {A B} (f : A ~> B) :
 Proof.
   intros [[|h] k]; simpl in *; auto with ffix.
   rewrite (bool_irrelevance (map_shape_is_nt _) (p_cons eq_refl));
-    reflexivity.
+    intuition (auto with ffix).
 Qed.
 
 Lemma list_map_nat {A B} (f : A ~> B) :

@@ -48,6 +48,11 @@ Ltac arewrite_unwrap ::=
   : Proper (@eqRel (A * B) (@pair_eq A (def_eq A) B (def_eq B)) ==> eqRel) f.
 Proof. intros [a b] [c d] [E1 E2]; simpl in *; subst; reflexivity. Qed.
 
+(** Functions out of types whose equivalence implies [=]. *)
+#[export] Instance proper_leibniz `{Leibniz A} `{eB : setoid B} (f : A -> B)
+  : Proper (eqRel ==> eqRel) f | 0.
+Proof. intros x y E; apply leibniz in E; subst; reflexivity. Qed.
+
 (** Functions out of [App F X], when the shapes of [F] are compared with [=]:
   * destruct the shape and anything the function matches on, then close the
   * goal by congruence, using the equivalence of the two continuations. *)
@@ -61,6 +66,13 @@ Ltac unfold_head :=
       tryif is_const h then unfold h else idtac
   end.
 
+(* Prove a goal [x =e y] by [x = y], when [=e] implies [=]. *)
+Ltac leibniz_goal :=
+  lazymatch goal with
+  | |- @eq _ _ _ => fail
+  | |- _ ?x ?y => change (x =e y); apply eq_leibniz
+  end.
+
 Ltac proper_app :=
   let sx := fresh "sx" in let sy := fresh "sy" in
   let kx := fresh "kx" in let ky := fresh "ky" in
@@ -72,6 +84,8 @@ Ltac proper_app :=
           end; simpl in * );
   repeat first [ reflexivity
                | solve [apply Ek; auto]
+               | solve [apply leibniz, Ek; auto]
+               | leibniz_goal
                | progress (simpl; f_equal)
                | apply app_eq
                | constructor

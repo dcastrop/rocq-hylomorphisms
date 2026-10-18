@@ -9,6 +9,12 @@
 
 (library
  (name extracted_mutualrec)
+ (wrapped false)
  (modules mutualrec)
  (libraries rocq-runtime.kernel)
  (flags :standard -w -a))
+
+(executable
+ (name main)
+ (modules main)
+ (libraries extracted_mutualrec))

@@ -66,12 +66,11 @@ Qed.
 Definition tsplit : RCoalg (TreeF (list int) unit) (list int)
   := mk_wf_coalg wf_lt split_fin.
 
-Definition msort : Ext (cata merge \o rana tsplit).
+Derive msort in (cata merge \o rana tsplit =e msort) as msort_calc.
 Proof.
-  calculate; rewrite cata_ana_hylo.
-  with_strategy opaque [wf_lt] simpl.
-  reflexivity.
-Defined.
+  rewrite cata_ana_hylo.
+  finished.
+Qed.
 
 Module Tests.
   Import List.

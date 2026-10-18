@@ -5,3 +5,9 @@
  (name Hylo.Extraction)
  (theories Stdlib Paco Hylo)
  (flags :standard -w -rewrite-rw,-missing-proof-command))
+
+(library
+ (name bigint)
+ (wrapped false)
+ (modules bigint)
+ (libraries zarith))
