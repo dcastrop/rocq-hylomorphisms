@@ -157,7 +157,14 @@ Section OMap.
 
   Definition omap (f : A ~> B) : option A ~> option B :=
     MkMorph (omap_morph f).
+
+  #[export] Instance omap_proper : Proper (eqRel ==> eqRel) omap.
+  Proof. intros f g E [x|]; simpl; auto. Qed.
 End OMap.
+
+Lemma omap_comp `{setoid A} `{setoid B} `{setoid C} (g : B ~> C) (f : A ~> B)
+  : omap g \o omap f =e omap (g \o f).
+Proof. intros [x|]; simpl; reflexivity. Qed.
 
 Definition opt_cons {A} (o : option A) (l : list A) : list A :=
   match o with
@@ -210,6 +217,13 @@ End MAlg.
 
 Arguments malg {_}%_type_scope {_} {_}%_type_scope F {_} {_}%_type_scope {_}
   _ _.
+
+#[export] Instance malg_proper `{@Finite Sh Esh P F} `(M : @Monoid W eW)
+  : Proper (eqRel ==> eqRel) (malg F M).
+Proof.
+  intros l1 l2 E [s k]; simpl.
+  apply mconcat_proper, opt_cons_proper; [apply E | apply Forall2_eqRel_refl].
+Qed.
 
 (** * Fusion with monoid homomorphisms *)
 Section Fusion.
