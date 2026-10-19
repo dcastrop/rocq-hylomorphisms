@@ -92,6 +92,24 @@ Section FCoalgDef.
   Arguments mk_wf_coalg {A}%_type_scope {eA} {B}%_type_scope m [R] WF [c]
     RR.
 
+  (** The converse: a recursive coalgebra is well-founded for the relation
+    * "is a child of", so its termination proofs can be used where
+    * [well_founded] is expected. *)
+  Definition child `{eA : setoid A} (c : Coalg F A) (y x : A) : Prop :=
+    exists e : Pos F (shape (c x)), cont (c x) e = y.
+
+  Lemma RecF_Acc `{eA : setoid A} (c : Coalg F A) x
+    : RecF c x <-> Acc (child c) x.
+  Proof.
+    split; induction 1 as [x _ Ih]; constructor.
+    - intros y [e <-]; apply Ih.
+    - intros e; apply Ih; exists e; reflexivity.
+  Qed.
+
+  Lemma RecP_well_founded `{eA : setoid A} (c : Coalg F A)
+    : RecP c <-> well_founded (child c).
+  Proof. split; intros H x; apply RecF_Acc, H. Qed.
+
   (* Finite Trees *)
   Definition FinF : GFix F -> Prop := RecF g_out.
 
