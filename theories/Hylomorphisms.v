@@ -5,9 +5,10 @@ Unset Strict Implicit.
 Require Import Hylo.Equivalence.
 Require Import Hylo.Morphism.
 Require Import Hylo.Container.
-Require Import Hylo.Algebra.
 Require Import Hylo.Coalgebra.
 Require Import Hylo.FCoalgebra.
+
+Abbreviation Alg F A := (App F A ~> A).
 
 Section HyloDef.
   Context `{F : Cont Sh P} `{eA : setoid A} `{eB : setoid B}.
@@ -99,12 +100,6 @@ Section HyloFusion.
   Context `{F : Cont Sh P}.
   Context `{eA : setoid A} `{eB : setoid B} `{eC : setoid C}.
 
-  Lemma hylo_cata (g : Alg F B) : cata g =e hylo g l_out.
-  Proof. rewrite hylo_uniq, <- cata_univ; reflexivity. Qed.
-
-  Lemma hylo_ana (h : RCoalg F A) : rana h =e hylo l_in h.
-  Proof. rewrite hylo_uniq, <- rana_univ; reflexivity. Qed.
-
   Lemma splitC (f1 f2 : B ~> C) (g1 g2 : A ~> B)
     : f1 =e f2 -> g1 =e g2 -> f1 \o g1 =e f2 \o g2.
   Proof. intros -> ->; reflexivity. Qed.
@@ -134,21 +129,6 @@ Section HyloFusion.
   Qed.
 End HyloFusion.
 
-Corollary cata_ana_hylo `(F : Cont Sh P) `{setoid A} `{setoid B}
-  (g : Alg F B) (h : RCoalg F A)
-  : cata g \o rana h =e hylo g h.
-Proof. rewrite hylo_cata, hylo_ana; apply deforest, l_out_in. Qed.
-
-Corollary cata_ana_hylo_f `(F : Cont Sh P) `{setoid A} `{setoid B}
-  (g : Alg F B) (h : RCoalg F A)
-  : cata g \o ccata l_in \o liftP (ana h) (rcoalg_fin h) =e hylo g h.
-Proof. arewrite (ana_rana h); apply cata_ana_hylo. Qed.
-
-Corollary cata_ana_hylo_gf `(F : Cont Sh P) `{setoid A} `{setoid B}
-  (g : Alg F B) (h : RCoalg F A)
-  : ccata g \o liftP (ana h) (rcoalg_fin h) =e hylo g h.
-Proof. rewrite <- cata_ccata, cata_ana_hylo_f; reflexivity. Qed.
-
 Corollary hylo_map_shift `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
   `{setoid A} `{setoid B}
   (g : Alg G B) (m : naturalM F G) (h : RCoalg F A)
@@ -159,37 +139,3 @@ Proof.
 Qed.
 
 Arguments deforest & {_ _ _ _ _ _ _ _ _ _ _ _ _ _}.
-Arguments l_out_in & {_ _ _ F}.
-
-Corollary hylo_map_fusion_c `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
-  `{setoid A} `{setoid B} (g : Alg G B) (m : naturalM F G) (h : RCoalg F A)
-  : hylo g l_out \o hylo (l_in \o natural m) h =e hylo g (natural m \o h).
-Proof. rewrite hylo_map_shift, deforest; [reflexivity | apply l_out_in]. Qed.
-
-Corollary hylo_map_fusion `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
-  `{setoid A} `{setoid B}
-  (g : Alg G B) (m : naturalM F G) (h : RCoalg F A)
-  : hylo g l_out \o hylo (l_in \o natural m) h =e hylo (g \o natural m) h.
-Proof.
-  rewrite hylo_map_shift, deforest, ?hylo_map_shift;
-    [reflexivity | apply l_out_in].
-Qed.
-
-Definition everywhere `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
-  (f : naturalM F G) : LFix F ~> LFix G :=
-  hylo (l_in \o natural f) l_out.
-
-Lemma everywhere_id `{F : Cont Sf P} :
-  everywhere id =e id (A:=LFix F).
-Proof.
-  unfold everywhere; symmetry; apply hylo_uniq.
-  rewrite fmap_id, idKr, natural_idI, idKr, l_in_out; reflexivity.
-Qed.
-
-Lemma everywhere_comp `{F : Cont Sf P} `{SSg : setoid Sg} {G : Cont Sg P}
-  `{SSh : setoid Sh} {H : Cont Sh P} (f : naturalM G H) (g : naturalM F G)
-  : everywhere f \o everywhere g =e everywhere (f \o g).
-Proof.
-  unfold everywhere; rewrite hylo_map_fusion; refine (app_eq hylo _ l_out).
-  arewrite (natural_comp (X:=LFix H) f g); reflexivity.
-Qed.

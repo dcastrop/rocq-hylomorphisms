@@ -36,7 +36,7 @@ Canonical Structure proper_rcoalg `{F : Cont Sh P} `{eA : setoid A}
   Rec (coalg := proper_morph c) T.
 Extraction Inline proper_rcoalg.
 
-#[export] Hint Unfold f_out f_nat_eta proper_rcoalg : canonical.
+#[export] Hint Unfold f_nat_eta proper_rcoalg : canonical.
 
 Ltac arewrite_unwrap ::=
   cbv [reverse_coercion]; autounfold with canonical; cbn [coalg natT].
@@ -104,3 +104,73 @@ Ltac resolve_setoids :=
 #[export] Hint Extern 10 (Proper (@eqRel (App _ _) _ ==> _) _) =>
   resolve_setoids; unfold Proper, respectful; solve [proper_app]
   : typeclass_instances.
+
+(** Functions out of polynomial types (pairs, sums, containers) with any
+  * equivalences: decompose both arguments and their equivalence, replace the
+  * components whose equivalence implies [=], and close the goal by
+  * congruence with the component equivalences. *)
+Ltac decompose_eq x y E :=
+  let T := type of x in let T := eval hnf in T in
+  lazymatch T with
+  | prod _ _ =>
+      let x1 := fresh "x" in let x2 := fresh "x" in
+      let y1 := fresh "y" in let y2 := fresh "y" in
+      let E1 := fresh "E" in let E2 := fresh "E" in
+      destruct x as [x1 x2], y as [y1 y2], E as [E1 E2]; simpl in E1, E2;
+      decompose_eq x1 y1 E1; decompose_eq x2 y2 E2
+  | sum _ _ =>
+      let x1 := fresh "x" in let y1 := fresh "y" in
+      destruct x as [x1|x1], y as [y1|y1]; simpl in E; try contradiction;
+      decompose_eq x1 y1 E
+  | App _ _ =>
+      let sx := fresh "sx" in let sy := fresh "sy" in
+      let kx := fresh "kx" in let ky := fresh "ky" in
+      let Es := fresh "Es" in let Ek := fresh "Ek" in
+      destruct x as [sx kx], y as [sy ky], E as [Es Ek]; simpl in Es, Ek;
+      decompose_eq sx sy Es
+  | _ => first [subst y | apply leibniz in E; subst y | idtac]
+  end.
+
+Ltac proper_step :=
+  first [ reflexivity
+        | assumption
+        | progress intros
+        | match goal with |- context [match ?s with _ => _ end] => is_var s; destruct s end
+        | match goal with |- context [if ?c then _ else _] => destruct c end
+        | solve [apply leibniz; assumption]
+        | progress (simpl; f_equal)
+        | apply app_eq
+        | constructor
+        | let v1 := fresh "v" in let V1 := fresh "V" in
+          let v2 := fresh "v" in let V2 := fresh "V" in
+          let Hv := fresh "Hv" in
+          intros [v1 V1] [v2 V2] Hv; simpl in *
+        | match goal with Ek : forall _ _, val _ = val _ -> _ |- _ => apply Ek end ].
+
+(* At most [n] steps on each goal, so that the search always terminates *)
+Ltac proper_steps n :=
+  lazymatch n with
+  | O => idtac
+  | S ?m => try (progress proper_step; proper_steps m)
+  end.
+
+Ltac proper_poly :=
+  let x := fresh "x" in let y := fresh "y" in let E := fresh "E" in
+  intros x y E; decompose_eq x y E; try unfold_head; simpl; proper_steps 100.
+
+#[export] Hint Extern 11 (Proper (@eqRel (prod _ _) _ ==> _) _) =>
+  resolve_setoids; unfold Proper, respectful; solve [proper_poly]
+  : typeclass_instances.
+#[export] Hint Extern 11 (Proper (@eqRel (sum _ _) _ ==> _) _) =>
+  resolve_setoids; unfold Proper, respectful; solve [proper_poly]
+  : typeclass_instances.
+#[export] Hint Extern 11 (Proper (@eqRel (App _ _) _ ==> _) _) =>
+  resolve_setoids; unfold Proper, respectful; solve [proper_poly]
+  : typeclass_instances.
+
+(** [Program Definition f : A ~> B := morphism g.] makes [g] a morphism,
+  * proving it proper with [proper_poly]. If that fails (or takes more than 5
+  * seconds), the proof is left as an obligation ([Next Obligation]). Other
+  * obligations get the default tactic. *)
+Notation "'morphism' f" := (@MkMorph _ _ _ _ f%function _) (at level 10, f at level 200).
+#[export] Obligation Tactic := first [solve [timeout 5 proper_poly] | Tactics.program_simpl].

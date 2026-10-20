@@ -445,6 +445,14 @@ End SpecDef.
   * transparent and [f_calc] opaque. *)
 Ltac finished := lazymatch goal with |- _ =e ?f => subst f end; reflexivity.
 
+(** For [Derive f in (t = f L) as f_calc]: instantiates [f] with [t]
+  * abstracted over [L] *)
+Ltac abstracted :=
+  lazymatch goal with |- _ = ?f _ => subst f end;
+  lazymatch goal with |- ?t = ?e ?L =>
+    lazymatch eval pattern L in t with ?F _ => unify e F end
+  end; reflexivity.
+
 Section PredSubty.
   Context `{eA : setoid A} `{eB : setoid B}.
 

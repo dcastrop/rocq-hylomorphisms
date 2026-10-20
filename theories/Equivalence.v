@@ -146,6 +146,17 @@ Add Parametric Relation `{eA : setoid A} : (list A) (@list_eqR A eA)
     transitivity proved by (@e_trans (list A) list_eq)
       as ListEq.
 
+#[export] Instance option_eq `{eA : setoid A} : setoid (option A).
+Proof.
+  apply (@MkSetoid _ (fun x y => match x, y with
+                                 | None, None => True
+                                 | Some u, Some v => u =e v
+                                 | _, _ => False
+                                 end));
+    [intros [] | intros [] [] | intros [] [] []]; simpl; eauto with ffix;
+    contradiction.
+Defined.
+
 (** Types whose equivalence implies [=]. *)
 #[mode = "! -"]
 Class Leibniz T `{setoid T} : Prop := leibniz : forall x y : T, x =e y -> x = y.
@@ -171,6 +182,12 @@ Proof.
   destruct E; f_equal; auto.
 Qed.
 
+#[export] Instance option_leibniz `{Leibniz A} : Leibniz (option A).
+Proof.
+  intros [x|] [y|] E; simpl in *; try contradiction; trivial.
+  f_equal; apply leibniz, E.
+Qed.
+
 #[export] Instance ext_no_def_eq A B : NoDefEq (A -> B) := {}.
 #[export] Instance pair_no_def_eq A B : NoDefEq (A * B) := {}.
 #[export] Instance sum_no_def_eq A B : NoDefEq (A + B) := {}.
@@ -178,6 +195,7 @@ Qed.
 #[export] Instance sig_no_def_eq A (P : A -> Prop)
   : NoDefEq {a : A | P a} := {}.
 #[export] Instance list_no_def_eq A : NoDefEq (list A) := {}.
+#[export] Instance option_no_def_eq A : NoDefEq (option A) := {}.
 
 #[mode = "-"]
 Class equivs (A : list Type) : Prop.

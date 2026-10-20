@@ -7,7 +7,6 @@ Unset Auto Template Polymorphism.
 From Hylo Require Import Equivalence.
 From Hylo Require Import Morphism.
 From Hylo Require Import Container.
-From Hylo Require Import Algebra.
 From Hylo Require Import Coalgebra.
 From Hylo Require Import FCoalgebra.
 From Hylo Require Import Hylomorphisms.
@@ -121,26 +120,6 @@ Section ListMonoid.
   Solve All Obligations with
     (intros; simpl; rewrite ?app_assoc, ?app_nil_r; eauto with ffix).
 End ListMonoid.
-
-(** * Optional values *)
-
-#[export] Instance option_eq `{eA : setoid A} : setoid (option A).
-Proof.
-  apply (@MkSetoid _ (fun x y => match x, y with
-                                 | None, None => True
-                                 | Some u, Some v => u =e v
-                                 | _, _ => False
-                                 end));
-    [intros [] | intros [] [] | intros [] [] []]; simpl; eauto with ffix;
-    contradiction.
-Defined.
-#[export] Instance option_no_def_eq A : NoDefEq (option A) := {}.
-
-#[export] Instance option_leibniz `{Leibniz A} : Leibniz (option A).
-Proof.
-  intros [x|] [y|] E; simpl in *; try contradiction; trivial.
-  f_equal; apply leibniz, E.
-Qed.
 
 Section OMap.
   Context `{eA : setoid A} `{eB : setoid B}.

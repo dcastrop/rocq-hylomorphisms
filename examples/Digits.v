@@ -87,7 +87,7 @@ End FastPower.
 
 Derive sumsq_fold in (sumsq =e sumsq_fold) as sumsq_fold_calc.
 Proof.
-  unfold sumsq, Lmap, everywhere.
+  unfold sumsq, Lmap, everywhere, List.
   rewrite hylo_cata, hylo_map_fusion.
   rewrite hylo_ana, deforest by apply l_out_in.
   finished.
@@ -95,7 +95,7 @@ Qed.
 
 Derive sumsq_unfold in (sumsq =e sumsq_unfold) as sumsq_unfold_calc.
 Proof.
-  unfold sumsq, Lmap, everywhere.
+  unfold sumsq, Lmap, everywhere, List.
   rewrite hylo_cata, hylo_map_fusion.
   rewrite hylo_ana, deforest by apply l_out_in.
   rewrite hylo_map_shift.

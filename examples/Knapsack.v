@@ -10,10 +10,16 @@ From Stdlib Require Import List.
 From Stdlib Require Import Sint63.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Lia.
-From Stdlib Require Import PArray.
+From Stdlib Require Import ZifyUint63.
 
-Require Import Hylo.Examples.Dyna.
+Require Import Hylo.Dyna.
+Require Import Hylo.Examples.ArrayTable.
 
+(** * The specification: the naive (exponential) recursion
+  *
+  * [knapsack_naive n] is the best value of the items [(w, v)] that fit in [n],
+  * one recursive call per item. The shapes are the items that fit, and the
+  * positions their indices. *)
 Fixpoint max_int acc (l : list int) :=
   match l with
   | h :: t =>
@@ -22,160 +28,120 @@ Fixpoint max_int acc (l : list int) :=
   | nil => acc
   end.
 
-Definition jw (w : int) : nat := Nat.pred (Z.to_nat (Uint63.to_Z w)).
+Definition fits (n : int) (wv : int * int) : bool :=
+  ((0 <? Datatypes.fst wv)%uint63 && (Datatypes.fst wv <=? n)%uint63)%bool.
 
-Fixpoint memo_knapsack table (wvs : list (int * int)) :=
-  match wvs with
-  | nil => nil
-  | (w, v) :: t =>
-      if (0 <? w)%uint63 then
-        match lookupT (jw w) table with
-        | Some u => (u + v)%sint63 :: memo_knapsack table t
-        | None => memo_knapsack table t
-        end
-      else memo_knapsack table t
+Lemma items_valid_morph
+  : forall x y : list (int * int) * nat, x =e y ->
+    Nat.ltb (Datatypes.snd x) (List.length (Datatypes.fst x))
+    =e Nat.ltb (Datatypes.snd y) (List.length (Datatypes.fst y)).
+Proof. intros x y E; apply leibniz in E; subst y; reflexivity. Qed.
+
+#[export] Instance ItemsF : Cont (list (int * int)) nat :=
+  { valid := MkMorph items_valid_morph }.
+
+(* The children and the values of their items *)
+Fixpoint kids {X} (s : list (int * int))
+  : (forall i, Nat.ltb i (List.length s) = true -> X) -> list (X * int) :=
+  match s with
+  | nil => fun _ => nil
+  | (w, v) :: s' =>
+      fun k => (k 0 eq_refl, v) :: @kids X s' (fun i H => k (S i) H)
   end.
+Arguments kids {X} s k.
 
-Lemma memo_knapsack_morph wvs :
-  forall t1 t2, LFixR t1 t2 -> memo_knapsack t1 wvs = memo_knapsack t2 wvs.
+Lemma kids_ext {X} s (k1 k2 : forall i, Nat.ltb i (List.length s) = true -> X)
+  : (forall i H, k1 i H = k2 i H) -> kids s k1 = kids s k2.
 Proof.
-  intros t1 t2 Rt; induction wvs as [|[w v] wvs Ih]; simpl; trivial.
-  rewrite (lookupT_morph (eq_refl (jw w)) Rt), Ih; reflexivity.
+  revert k1 k2; induction s as [|[w v] s Ih]; intros k1 k2 Hk; cbn; trivial.
+  rewrite Hk; f_equal; apply Ih; intros; apply Hk.
 Qed.
 
-Definition knapsack_alg (wvs : list (int * int))
-  (x : App NatF (Table NatF int)) : int
-  := match x with
-     | MkCont sx kx =>
-         match sx with
-         | inl tt => fun kx => 0%sint63
-         | inr tt =>
-             fun kx =>
-               let table := kx (MkElem (inr tt) valid_inr_tt) in
-               max_int 0 (memo_knapsack table wvs)
-         end kx
-     end.
-Lemma knapsack_alg_morph wvs
-  : forall x y, x =e y -> knapsack_alg wvs x =e knapsack_alg wvs y.
+Definition naive_alg_ (x : App ItemsF int) : int :=
+  max_int 0 (map (fun rv => (Datatypes.fst rv + Datatypes.snd rv)%sint63)
+                 (kids (shape x) (fun i H => cont x (MkElem i H)))).
+
+Lemma naive_alg_morph : forall x y, x =e y -> naive_alg_ x =e naive_alg_ y.
 Proof.
-  intros [sx kx] [sy ky] [Es Ek]; simpl in *.
-  destruct sx as [[]|[]], sy as [[]|[]]; try destruct Es; trivial.
-  rewrite (memo_knapsack_morph wvs (Ek _ _ eq_refl)); reflexivity.
+  intros [s1 k1] [s2 k2] [Es Ek]; apply leibniz in Es; cbn in Es; subst s2.
+  unfold naive_alg_; cbn; do 2 f_equal; apply kids_ext; intros; apply Ek; auto.
 Qed.
 
-Definition knapsackA (wvs : list (int * int))
-  : App NatF (Table NatF int) ~> int
-  := Eval unfold knapsack_alg in MkMorph (knapsack_alg_morph wvs).
+Definition naive_alg : Alg ItemsF int := MkMorph naive_alg_morph.
 
-Fixpoint memo_knapsack_l (table : list int) (wvs : list (int * int)) :=
-  match wvs with
-  | nil => nil
-  | (w, v) :: t =>
-      if (0 <? w)%uint63 then
-        match nth_error table (jw w) with
-        | Some u => (u + v)%sint63 :: memo_knapsack_l table t
-        | None => memo_knapsack_l table t
-        end
-      else memo_knapsack_l table t
-  end.
+Definition naive_c_ wvs (n : int) : App ItemsF int :=
+  let s := filter (fits n) wvs in
+  MkCont s (fun e => (n - Datatypes.fst (nth (val e) s (0, 0)%uint63))%uint63).
 
-Definition knapsack_list_ (wvs : list (int * int)) (x : App NatF (list int)) : int :=
-  match x with
-  | MkCont (inl tt) _ => 0%sint63
-  | MkCont (inr tt) k => max_int 0 (memo_knapsack_l (k (MkElem (inr tt) valid_inr_tt)) wvs)
-  end.
+Lemma naive_c_morph wvs
+  : forall x y, x =e y -> naive_c_ wvs x =e naive_c_ wvs y.
+Proof. intros x y E; apply leibniz in E; subst y; reflexivity. Qed.
 
-Lemma knapsack_list_morph wvs
-  : forall x y, x =e y -> knapsack_list_ wvs x =e knapsack_list_ wvs y.
+Lemma naive_c_fin wvs
+  : respects_relation (MkMorph (naive_c_morph wvs))
+      (fun n => Z.to_nat (Uint63.to_Z n)) lt.
 Proof.
-  intros [[[]|[]] kx] [[[]|[]] ky] [Es Ek]; simpl in Es; cbn [cont shape] in Ek; try contradiction;
-    simpl; [reflexivity|].
-  rewrite (leibniz (Ek _ (MkElem (inr tt) valid_inr_tt) eq_refl)); reflexivity.
+  intros n [i V]; pose proof V as L.
+  change (Nat.ltb i (length (filter (fits n) wvs)) = true) in L.
+  apply (proj1 (Nat.ltb_lt _ _)), (nth_In _ (0, 0)%uint63), filter_In in L.
+  cbn -[Uint63.to_Z nth filter]; destruct (nth i _ _) as [w v], L as [_ Hf].
+  unfold fits in Hf; cbn [Datatypes.fst] in *; lia.
 Qed.
 
-Definition knapsackL wvs : App NatF (list int) ~> int :=
-  MkMorph (knapsack_list_morph wvs).
+Definition naive_c wvs : RCoalg ItemsF int :=
+  mk_wf_coalg wf_lt (naive_c_fin (wvs := wvs)).
 
-Lemma knapsack_list wvs : knapsackA wvs =e knapsackL wvs \o fmap to_list.
+Definition knapsack_naive wvs : int ~> int := hylo naive_alg (naive_c wvs).
+
+(** * The calculation
+  *
+  * [naive_fmap] unfolds the naive algebra on the naive coalgebra; the rest
+  * is [reenumerate] (with [look_down]) and [dyna_memo] from [Dyna]. *)
+Lemma kids_nth {X} (g : int * int -> X) s d
+  : kids s (fun i _ => g (nth i s d)) = map (fun p => (g p, Datatypes.snd p)) s.
+Proof. induction s as [|[w v] s Ih]; cbn; [|f_equal]; trivial. Qed.
+
+Lemma naive_fmap wvs (g : int ~> int) b
+  : naive_alg (fmap g (naive_c wvs b))
+    = max_int 0 (map (fun rv => (Datatypes.fst rv + Datatypes.snd rv)%sint63)
+        (map (fun p => (g (b - Datatypes.fst p)%uint63, Datatypes.snd p))
+           (filter (fits b) wvs))).
 Proof.
-  intros [[[]|[]] k]; simpl; trivial; f_equal.
-  induction wvs as [|[w v] wvs Ih]; simpl; trivial.
-  rewrite lookupT_to_list, Ih; reflexivity.
+  cbn -[filter max_int]; unfold naive_alg_; cbn -[filter max_int].
+  rewrite (kids_nth (fun p => g (b - Datatypes.fst p)%uint63)); reflexivity.
 Qed.
 
-Fixpoint memo_arr (t : array int) (c : int) (wvs : list (int * int)) :=
-  match wvs with
-  | nil => nil
-  | (w, v) :: wvs =>
-      if ((0 <? w)%uint63 && (w <=? c)%uint63)%bool then (t.[(c - w)%uint63] + v)%sint63 :: memo_arr t c wvs
-      else memo_arr t c wvs
-  end.
-
-Definition knapsack_arr_ (wvs : list (int * int)) (x : App NatF (array int * int)) : int :=
-  match x with
-  | MkCont (inl tt) _ => 0%sint63
-  | MkCont (inr tt) k =>
-      let (t, c) := k (MkElem (inr tt) valid_inr_tt) in max_int 0 (memo_arr t c wvs)
-  end.
-
-Lemma knapsack_arr_morph wvs
-  : forall x y, x =e y -> knapsack_arr_ wvs x =e knapsack_arr_ wvs y.
-Proof.
-  intros [[[]|[]] kx] [[[]|[]] ky] [Es Ek]; simpl in Es; cbn [cont shape] in Ek;
-    try contradiction; simpl; [reflexivity|].
-  rewrite (leibniz (Ek _ (MkElem (inr tt) valid_inr_tt) eq_refl)); reflexivity.
-Qed.
-
-Definition knapsackArr wvs : App NatF (array int * int) ~> int :=
-  MkMorph (knapsack_arr_morph wvs).
-
-Lemma jw_ltb w c : (0 <? w)%uint63 = true ->
-  Nat.ltb (jw w) (Z.to_nat (Uint63.to_Z c)) = (w <=? c)%uint63.
-Proof.
-  intros Hw%Uint63.ltb_spec; change (Uint63.to_Z 0) with 0%Z in Hw; unfold jw.
-  destruct (w <=? c)%uint63 eqn:E.
-  - apply Uint63.leb_spec in E; apply Nat.ltb_lt; lia.
-  - apply Nat.ltb_ge.
-    assert (~ (Uint63.to_Z w <= Uint63.to_Z c)%Z)
-      by (intros H'; apply Uint63.leb_spec in H'; congruence); lia.
-Qed.
-
-Lemma jw_ix w c : (0 <? w)%uint63 = true -> (w <=? c)%uint63 = true ->
-  ix (Z.to_nat (Uint63.to_Z c) - 1 - jw w) = (c - w)%uint63.
-Proof.
-  intros Hw%Uint63.ltb_spec Hc%Uint63.leb_spec; change (Uint63.to_Z 0) with 0%Z in Hw.
-  pose proof (Uint63.to_Z_bounded c); pose proof (Uint63.to_Z_bounded w).
-  apply Uint63.to_Z_inj; rewrite ix_spec, Uint63.sub_spec, Z.mod_small; unfold jw; lia.
-Qed.
-
-Lemma knapsack_arr_eq wvs : knapsackArr wvs =e knapsackL wvs \o fmap tl.
-Proof.
-  intros [[[]|[]] k]; simpl; trivial.
-  destruct (k _) as [t c]; simpl; f_equal.
-  induction wvs as [|[w v] wvs Ih]; simpl; trivial.
-  destruct (0 <? w)%uint63 eqn:Ew; simpl; [|exact Ih].
-  rewrite nth_tl_arr, jw_ltb by exact Ew.
-  destruct (w <=? c)%uint63 eqn:Ec; rewrite Ih; [rewrite jw_ix by trivial|]; reflexivity.
-Qed.
-
-Section Knapsack.
+Section Calculation.
   Variable wvs : list (int * int).
 
-  Derive knapsack in (dyna (knapsackA wvs) out_int_c =e knapsack) as knapsack_calc.
+  (** Step 1: the algebra that reads the subproblems through a [look] down the
+    * count-down: an item fits iff its subproblem is there *)
+  Derive knap_alg_ in
+    (forall (g : int ~> int) b,
+        naive_alg (fmap g (naive_c wvs b))
+        = knap_alg_ (look_rec (Pa := int) out_int_c g b))
+    as knap_look.
   Proof.
-    unfold dyna.
-    rewrite (headT_to_list 0%sint63).
-    arewrite (table_to_list out_int_c (knapsack_list wvs)).
-    rewrite hylo_out_int.
-    finished.
+    intros g b; rewrite naive_fmap, map_filter_pair; unfold fits.
+    erewrite map_some_ext by (intros; rewrite <- look_down; reflexivity).
+    abstracted.
   Qed.
 
-  Derive knapsack_arr
-    in (forall n, (Uint63.to_Z n < Uint63.to_Z max_length)%Z -> knapsack n = knapsack_arr n)
+  Lemma knap_alg_eq : forall l1 l2, l1 =e l2 -> knap_alg_ l1 =e knap_alg_ l2.
+  Proof.
+    intros l1 l2 E; apply eq_leibniz; unfold knap_alg_; do 2 f_equal.
+    apply map_some_ext; intros p; rewrite (leibniz (E _)); reflexivity.
+  Qed.
+
+  Definition knap_alg := MkMorph knap_alg_eq.
+
+  (** Step 2: the program, a dynamorphism on persistent arrays *)
+  Derive knapsack_arr in (knapsack_naive wvs =e knapsack_arr)
     as knapsack_arr_calc.
   Proof.
-    intros n Hn; unfold knapsack; cbn [Morphism.app comp].
-    refine (eq_trans (dyna_array 0%sint63 (knapsack_arr_eq wvs) Hn) _).
-    subst knapsack_arr; reflexivity.
+    unfold knapsack_naive.
+    rewrite (reenumerate (U := ATab int) (alg := knap_alg) knap_look).
+    rewrite dyna_memo.
+    finished.
   Qed.
-End Knapsack.
+End Calculation.

@@ -39,3 +39,27 @@ Proof. apply in_elt. Qed.
 
 Definition All {A : Type} (P : A -> Prop) (l : list A) : Prop :=
   forall x, In x l -> P x.
+
+(** [map] over the elements for which [f] gives a value *)
+Fixpoint map_some {X Y} (f : X -> option Y) (l : list X) : list Y :=
+  match l with
+  | nil => nil
+  | x :: l =>
+      match f x with Some y => y :: map_some f l | None => map_some f l end
+  end.
+
+Lemma map_filter_pair {X Y Z} (q : X * Z -> bool) (k : X * Z -> Y) l
+  : map (fun p => (k p, snd p)) (filter q l)
+    = map_some (fun p => option_map (fun u => (u, snd p))
+                                    (if q p then Some (k p) else None)) l.
+Proof.
+  induction l as [|x l Ih]; cbn; [|destruct (q x); cbn; rewrite Ih];
+    reflexivity.
+Qed.
+
+Lemma map_some_ext {X Y} (f g : X -> option Y) l
+  : (forall x, f x = g x) -> map_some f l = map_some g l.
+Proof.
+  intros E; induction l as [|x l Ih]; cbn; [|rewrite E, Ih]; reflexivity.
+Qed.
+

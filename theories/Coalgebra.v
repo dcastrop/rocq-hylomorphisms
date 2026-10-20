@@ -105,16 +105,16 @@ Section CoalgDef.
 
   Abbreviation Alg F A := (App F A ~> A) (only parsing).
 
-  Definition g_in : Alg F GFix := MkMorph l_in_eq.
-  Definition g_out : Coalg F GFix := MkMorph g_out_eq.
+  Definition gfix_in : Alg F GFix := MkMorph l_in_eq.
+  Definition gfix_out : Coalg F GFix := MkMorph g_out_eq.
 
-  Lemma g_in_out : g_in \o g_out =e id (A:=GFix).
+  Lemma gfix_in_out : gfix_in \o gfix_out =e id (A:=GFix).
   Proof.
     intros x; apply paco2_fold; constructor; auto with ffix.
     intros e1 e2 Ev; left; simpl; rewrite (elem_val_eq Ev); apply GFixR_refl.
   Qed.
 
-  Lemma g_out_in : g_out \o g_in =e id (A:=App F GFix).
+  Lemma gfix_out_in : gfix_out \o gfix_in =e id (A:=App F GFix).
   Proof. simpl. intros. generalize (e_refl x). simpl. trivial. Qed.
 
   Definition ana_f_u `{setoid A} (c : Coalg F A) (gf : A -> GFix) (x : A) :=
@@ -149,38 +149,113 @@ Section CoalgDef.
     intros e1 e2 Hv; right; apply CH, Ek, Hv; trivial.
   Qed.
 
-  Definition ana `{eA : setoid A} : Coalg F A ~> A ~> GFix := MkMorph ana_arr.
+  Definition gfix_ana `{eA : setoid A} : Coalg F A ~> A ~> GFix := MkMorph ana_arr.
 
-  Lemma ana_univ_r `(eA : setoid A) (h : Coalg F A) (f : A ~> GFix)
-    : f =e g_in \o fmap f \o h -> f =e ana h.
+  Lemma gfix_ana_univ `{eA : setoid A} (h : Coalg F A) (f : A ~> GFix)
+    : f =e gfix_ana h <-> f =e gfix_in \o fmap f \o h.
   Proof.
-    intros He x; simpl.
-    generalize (e_refl (f x)); generalize (f x) at 1 3; revert x.
-    coind CH; intros g0 x Ef.
-    assert (Rfg : g0 =e g_in (fmap f (h x))) by (rewrite Ef; apply He).
-    apply paco2_unfold in Rfg; auto with gfix; destruct Rfg as [Es Ek].
-    simpl in Es, Ek; apply paco2_fold; constructor; trivial.
-    intros e1 e2 Hv; right; apply CH; destruct (Ek e1 e2 Hv) as [|[]]; trivial.
+    split.
+    - intros H; rewrite H; intros x; apply paco2_fold; constructor;
+        simpl; [reflexivity|].
+      intros e1 e2 Hv; rewrite (elem_val_eq Hv); left; apply GFixR_refl.
+    - intros He x; simpl.
+      generalize (e_refl (f x)); generalize (f x) at 1 3; revert x.
+      coind CH; intros g0 x Ef.
+      assert (Rfg : g0 =e gfix_in (fmap f (h x))) by (rewrite Ef; apply He).
+      apply paco2_unfold in Rfg; auto with gfix; destruct Rfg as [Es Ek].
+      simpl in Es, Ek; apply paco2_fold; constructor; trivial.
+      intros e1 e2 Hv; right; apply CH; destruct (Ek e1 e2 Hv) as [|[]]; trivial.
   Qed.
-
-  Lemma ana_univ_l `{eA : setoid A} (h : Coalg F A) (f : A ~> GFix)
-    : f =e ana h -> f =e g_in \o fmap f \o h.
-  Proof.
-    intros H; rewrite H; intros x; apply paco2_fold; constructor;
-      simpl; [reflexivity|].
-    intros e1 e2 Hv; rewrite (elem_val_eq Hv); left; apply GFixR_refl.
-  Qed.
-
-  Lemma ana_univ `{eA : setoid A} (h : Coalg F A) (f : A ~> GFix)
-    : f =e ana h <-> f =e g_in \o fmap f \o h.
-  Proof. split;[apply ana_univ_l|apply ana_univ_r]. Qed.
-
-  Corollary ana_unfold `{eA : setoid A} (h : Coalg F A) :
-    ana h =e g_in \o fmap (ana h) \o h.
-  Proof. rewrite <- ana_univ. reflexivity. Qed.
 End CoalgDef.
 
-Arguments ana {Sh}%_type_scope {Esh} {P}%_type_scope {F}
-  {A}%_type_scope {eA}.
-Arguments g_in & {Sh}%_type_scope {Esh} {P}%_type_scope {F}.
-Arguments g_out & {Sh}%_type_scope {Esh} {P}%_type_scope {F}.
+(** * Terminal coalgebras
+  *
+  * Dual to [Initial] (in [Algebra]): [T] is a terminal [F]-coalgebra, with
+  * [g_out] and its inverse [g_in]. [GFix F] is the default one. *)
+Class Terminal `(F : Cont Sh P) (T : Type) `{eT : setoid T} :=
+  { g_in : App F T ~> T;
+    g_out : T ~> App F T;
+    g_in_out : g_in \o g_out =e id;
+    g_out_in : g_out \o g_in =e id;
+    ana : forall `{eA : setoid A}, Coalg F A ~> A ~> T;
+    ana_univ : forall `{eA : setoid A} (h : Coalg F A) (f : A ~> T),
+        f =e ana h <-> f =e g_in \o fmap f \o h
+  }.
+
+Arguments Terminal {Sh Esh P} F T {eT}.
+Arguments g_in & {Sh Esh P F T eT _}.
+Arguments g_out & {Sh Esh P F T eT _}.
+Arguments ana {Sh Esh P F T eT _ A eA}.
+Arguments g_in_out {Sh Esh P F T eT _}.
+Arguments g_out_in {Sh Esh P F T eT _}.
+Arguments ana_univ {Sh Esh P F T eT _ A eA} h f.
+
+#[export] Instance GFix_terminal `(F : Cont Sh P) : Terminal F (GFix F) | 1 :=
+  {| g_in := gfix_in F;
+     g_out := gfix_out F;
+     g_in_out := gfix_in_out (F := F);
+     g_out_in := gfix_out_in (F := F);
+     ana := fun _ _ => gfix_ana F;
+     ana_univ := fun _ _ => gfix_ana_univ (F := F)
+  |}.
+
+Section TerminalLaws.
+  Context `{F : Cont Sh P} `{eT : setoid T} `{!Terminal F T}.
+
+  Lemma ana_univ_r `{eA : setoid A} (h : Coalg F A) (f : A ~> T)
+    : f =e g_in \o fmap f \o h -> f =e ana h.
+  Proof. apply ana_univ. Qed.
+
+  Lemma ana_univ_l `{eA : setoid A} (h : Coalg F A) (f : A ~> T)
+    : f =e ana h -> f =e g_in \o fmap f \o h.
+  Proof. apply ana_univ. Qed.
+
+  Corollary ana_unfold `{eA : setoid A} (h : Coalg F A)
+    : ana h =e g_in \o fmap (ana h) \o h.
+  Proof. rewrite <- ana_univ. reflexivity. Qed.
+
+  Lemma ana_out `{eA : setoid A} (h : Coalg F A) : g_out \o ana h =e fmap (ana h) \o h.
+  Proof. intros x; cbn [app comp]; rewrite (ana_unfold h x); exact (g_out_in _). Qed.
+
+  Lemma ana_uniq `{eA : setoid A} (h : Coalg F A) (f : A ~> T)
+    : g_out \o f =e fmap f \o h -> f =e ana h.
+  Proof.
+    intros Hf; apply ana_univ; intros x; cbn [app comp].
+    rewrite <- (Hf x); symmetry; exact (g_in_out _).
+  Qed.
+
+  Lemma ana_out_id : ana g_out =e id (A := T).
+  Proof.
+    symmetry; apply ana_univ; rewrite fmap_id, idKr, g_in_out; reflexivity.
+  Qed.
+End TerminalLaws.
+Arguments ana_out_id {Sh Esh P F} T {eT _} _.
+
+(** Any two terminal coalgebras are isomorphic *)
+Section TerminalIso.
+  Context `{F : Cont Sh P} `{eT : setoid T} `{!Terminal F T} `{eU : setoid U} `{!Terminal F U}.
+
+  Definition coiso : T ~> U := ana g_out.
+
+  Lemma coiso_out : g_out \o coiso =e fmap coiso \o g_out.
+  Proof. apply ana_out. Qed.
+
+  (** Anamorphisms do not depend on the terminal coalgebra *)
+  Lemma ana_coiso `{eA : setoid A} (h : Coalg F A) : coiso \o ana h =e ana h.
+  Proof.
+    apply ana_uniq; intros x; etransitivity; [apply (coiso_out _)|]; cbn [app comp].
+    etransitivity; [apply app_eq, (ana_out h x)|]; reflexivity.
+  Qed.
+End TerminalIso.
+Arguments coiso {Sh Esh P F} T {eT _} U {eU _}.
+Arguments coiso_out {Sh Esh P F} T {eT _} U {eU _} _.
+Arguments ana_coiso {Sh Esh P F} T {eT _} U {eU _} {A eA} h _.
+
+Lemma coiso_inv `{F : Cont Sh P} `{eT : setoid T} `{!Terminal F T} `{eU : setoid U} `{!Terminal F U}
+  : coiso U T \o coiso T U =e id.
+Proof.
+  rewrite <- (ana_out_id T); apply ana_uniq; intros x; cbn [app comp].
+  etransitivity; [apply (coiso_out U T _)|]; cbn [app comp].
+  etransitivity; [apply app_eq, (coiso_out T U x)|]; reflexivity.
+Qed.
+Arguments coiso_inv {Sh Esh P F} T {eT _} U {eU _} _.
