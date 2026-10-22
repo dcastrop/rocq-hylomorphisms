@@ -100,7 +100,7 @@ Proof.
     unfold out_int; destruct (j =? 0)%uint63 eqn:Ej; cbn -[iwalk];
     [exact E | exfalso; lia | exact E |].
   pose proof (nat_child_hom (Hh x y E)) as Hp.
-  destruct (nat_child (sx x)), (nat_child (sy y)); cbn in Hp |- *;
+  destruct (nat_child (sx x)), (nat_child (sy y)); cbn -[iwalk] in Hp |- *;
     try contradiction; [apply Ih; [lia | exact Hp] | exact I].
 Qed.
 
@@ -113,7 +113,8 @@ Proof.
   intros Hy j; unfold iwalk_from, iwalk_child.
   pose proof (nat_child_hom Hy) as Hp.
   destruct (nat_child y), (nat_child y'), (j =? 0)%uint63;
-    cbn in Hp |- *; try contradiction; try exact I; apply iwalk_hom; assumption.
+    cbn -[iwalk] in Hp |- *; try contradiction; try exact I;
+    apply iwalk_hom; assumption.
 Qed.
 
 (** * Changing the coalgebra
