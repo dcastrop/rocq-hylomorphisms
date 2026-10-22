@@ -1,12 +1,9 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-Require Import Hylo.Equivalence.
-Require Import Hylo.Morphism.
-Require Import Hylo.Container.
-Require Import Hylo.Coalgebra.
-Require Import Hylo.FCoalgebra.
+Require Import Hylo.Core.
 
 Abbreviation Alg F A := (App F A ~> A).
 

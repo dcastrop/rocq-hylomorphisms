@@ -1,12 +1,14 @@
+Set Warnings "-bad-template-constraint,-disj-pattern-notation".
+Set Warnings "-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.MonoidAlg.
+Require Import Hylo.Hylo.
+Require Import Hylo.Lists.
+Require Import Hylo.Extraction.Specialise.
+Require Import Hylo.Extraction.ExtrBigint.
 
-Require Import Hylo.Examples.CList.
-Require Import Hylo.Examples.ListLaws.
 
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Lia.
@@ -50,14 +52,21 @@ Definition segs : list (option Z) ~> list (list (option Z)) :=
 
 Definition some_m : Z ~> option Z := morph_of Some.
 
-Definition mss : list Z ~> option Z := maximum \o lmap sum \o segs \o lmap some_m.
+Definition mss : list Z ~> option Z :=
+  maximum \o lmap sum \o segs \o lmap some_m.
 
 Definition odot := horner_step maxplus.
 
 Lemma horner_mss : maximum \o lmap sum \o inits =e foldr odot (Some 0).
 Proof. apply (horner maxplus). Qed.
 
-Derive mss_linear in (mss =e mss_linear) as mss_calc.
+(* [tup] stays folded, and is inlined by extraction: it binds the recursive
+   result once *)
+Extraction Inline tup.
+#[local] Hint Unfold odot horner_step maxplus max_monoid plus_monoid tup_step
+  some_m : unfold_code.
+
+Derive mss_linear in (mss =e morph_of mss_linear) as mss_calc.
 Proof.
   unfold mss, segs.
   arewrite (map_promotion sum).

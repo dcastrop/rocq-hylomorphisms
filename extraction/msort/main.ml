@@ -8,7 +8,7 @@ let () =
   Random.init 42;
   let n = 100_000 in
   let xs = List.init n (fun _ -> Uint63.of_int (Random.int 1_000_000)) in
-  let ys = time "msort, n=10^5" (fun () -> Msort.msort_code xs) in
+  let ys = time "msort, n=10^5" (fun () -> Msort.msort xs) in
   let rec sorted = function
     | a :: (b :: _ as t) -> Uint63.le a b && sorted t
     | _ -> true in

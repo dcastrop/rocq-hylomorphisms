@@ -1,5 +1,7 @@
+(include_subdirs qualified)
+
 (rocq.theory
  (name Hylo)
  (package rocq-hylomorphisms)
  (theories Stdlib Paco)
- (flags :standard -w -rewrite-rw,-missing-proof-command))
+ (flags :standard -w +all))

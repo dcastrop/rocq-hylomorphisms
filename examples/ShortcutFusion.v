@@ -1,12 +1,13 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
+Require Import Hylo.Hylo.
+Require Import Hylo.Lists.
 
 Require Import Hylo.Examples.BTree.
-Require Import Hylo.Examples.CList.
+Require Import Hylo.Extraction.Specialise.
 
 From Stdlib Require Import List.
 From Stdlib Require Import Uint63.
@@ -70,10 +71,13 @@ Definition len_alg {A} : App (ListF A) int ~> int :=
 
 Definition length {A} := cata (@len_alg A).
 
+#[local] Hint Unfold tau_alg tau_alg_ append len_alg length : unfold_code.
+
 Section Example1.
   Context {A B : Type} (f : A ~> B) (ys : list A).
 
-  Derive example1 in (length \o Lmap f \o append ys =e example1) as example1_calc.
+  Derive example1 in (length \o Lmap f \o append ys =e morph_of example1)
+    as example1_calc.
   Proof.
     unfold length, Lmap, append, everywhere.
     rewrite !hylo_cata, hylo_map_fusion.
@@ -142,7 +146,8 @@ Qed.
 Section Example2.
   Context {A : Type}.
 
-  Derive example2 in (hylo len_alg ilist_coalg \o @reverse A =e example2)
+  Derive example2
+    in (hylo len_alg ilist_coalg \o @reverse A =e morph_of example2)
     as example2_calc.
   Proof.
     unfold reverse.

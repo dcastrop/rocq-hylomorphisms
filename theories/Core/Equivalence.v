@@ -63,6 +63,7 @@ Definition def_eq A : setoid A :=
   * [NoDefEq] (declared next to each type's own [setoid] instance): otherwise
   * typeclass backtracking can pick [=] where the specific instance was
   * meant. *)
+#[mode = "-"]
 Class NoDefEq (A : Type) : Prop := {}.
 
 Ltac def_eq_fallback A :=
@@ -125,8 +126,10 @@ Fixpoint list_eqR `{setoid A} (x y : list A) : Prop :=
 
 Ltac destruct_list_match :=
   match goal with
-  | |- context [match ?l with nil => _ | cons _ _ => _ end] => is_var l; destruct l
-  | H : context [match ?l with nil => _ | cons _ _ => _ end] |- _ => is_var l; destruct l
+  | |- context [match ?l with nil => _ | cons _ _ => _ end] =>
+      is_var l; destruct l
+  | H : context [match ?l with nil => _ | cons _ _ => _ end] |- _ =>
+      is_var l; destruct l
   end.
 
 #[local] Hint Extern 4 =>

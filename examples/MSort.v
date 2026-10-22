@@ -1,11 +1,12 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
+Require Import Hylo.Hylo.
 
 Require Import Hylo.Examples.BTree.
+Require Import Hylo.Extraction.Specialise.
 
 From Stdlib Require Import Lia.
 From Stdlib Require Import List.
@@ -66,9 +67,15 @@ Qed.
 Definition tsplit : RCoalg (TreeF (list int) unit) (list int)
   := mk_wf_coalg wf_lt split_fin.
 
-Derive msort in (cata merge \o rana tsplit =e msort) as msort_calc.
+(* The CPS split: the cases of [c_split], passing each layer to [k] *)
+Definition tsplit_k : CCoalg tsplit.
+Proof. cps_from_coalg. Defined.
+
+#[local] Hint Unfold merge tsplit c_split tsplit_k : unfold_code.
+
+Derive msort in (cata merge \o rana tsplit =e morph_of msort) as msort_calc.
 Proof.
-  rewrite cata_ana_hylo.
+  rewrite cata_ana_hylo, <- (hylo_cps_hylo merge tsplit_k).
   finished.
 Qed.
 

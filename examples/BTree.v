@@ -1,8 +1,9 @@
+Set Warnings "-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-From Hylo Require Import Hylo.
+Require Import Hylo.Hylo.
 
 From Stdlib Require List.
 
@@ -86,6 +87,8 @@ Definition a_out {L A X : Type} (x : App (TreeF L A) X) : ITreeF L A X :=
   | Node _ n => fun E => node n (e_lbranch k E) (e_rbranch k E)
   end eq_refl.
 Arguments a_out {L A X} x /.
+#[export] Hint Unfold a_out posL posR : unfold_code.
+#[export] Hint Unfold nt_tree nt_shape : unfold_code.
 
 Inductive itree L A := | i_leaf (l : L) | i_node (x : A) (l r : itree L A).
 Definition to_tree {L A} (x : itree L A) : App (TreeF L A) (itree L A) :=

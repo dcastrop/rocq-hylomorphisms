@@ -1,12 +1,13 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-Require Import Hylo.Utils.
-Require Export Hylo.Equivalence.
-Require Export Hylo.Morphism.
+Require Import Hylo.Core.Utils.
+Require Import Hylo.Core.Equivalence.
+Require Import Hylo.Core.Morphism.
 
 (** Containers: shapes [Sh], positions [P], and the positions [valid] in each
   * shape. A class with fixed [Sh] and [P], rather than a record with types as
@@ -129,9 +130,10 @@ Proof. intros []. reflexivity. Qed.
 #[export] Instance Id : Cont unit unit :=
   {| valid := {| app := fun _ => true; app_eq := fun _ _ _ => eq_refl |} |}.
 
-#[export] Instance K A : Cont A False :=
+#[export] Instance K A `{setoid A} : Cont A False :=
   {| valid := {| app := fun x : A * False => match snd x with end;
                  app_eq := fun x _ _ => match snd x with end |} |}.
+Arguments K A {_}.
 
 (* Product container *)
 Section Product.
@@ -140,6 +142,7 @@ Section Product.
   Abbreviation Ps := ((S1 * S2)%type).
   Abbreviation Pp := ((P1 + P2)%type).
   Instance Prod : Cont Ps Pp.
+  Proof.
   refine {| valid := {| app := fun x : Ps * Pp  =>
                                match snd x with
                                | inl p => valid (fst (fst x), p)
@@ -151,12 +154,13 @@ Section Product.
 End Product.
 
 (* Sum container *)
-Section Sum.
+Section SumDef.
   Context `{setoid S1} `{setoid S2} (P1 P2 : Type).
   Context (C1 : Cont S1 P1) (C2 : Cont S2 P2).
   Abbreviation Ps := ((S1 + S2)%type).
   Abbreviation Pp := ((P1 + P2)%type).
   Instance Sum : Cont Ps Pp.
+  Proof.
   refine {| valid := {| app := fun x : Ps * Pp  =>
                                match fst x, snd x with
                                | inl s, inl p => valid (s, p)
@@ -167,7 +171,7 @@ Section Sum.
     simpl in *; subst; try (inversion F); try (inversion E); trivial;
     apply fold_eq, app_eq; simpl; split; trivial.
   Defined.
-End Sum.
+End SumDef.
 
 Section Composition.
   Context `(F : Cont S1 P1) `(G : Cont S2 P2).
@@ -175,6 +179,7 @@ Section Composition.
   Definition composeValid :
     @morph (App F S2 * (P1 * P2))
       (pair_eq (eq_B := def_eq (P1 * P2))) bool (def_eq bool).
+  Proof.
     refine
       {| app :=
           fun (sp : App F S2 * (P1 * P2)) =>
@@ -211,7 +216,7 @@ Section Composition.
     Instance CompCont : Cont (App F S2) (P1 * P2) := { valid := composeValid }.
 End Composition.
 
-Section Nest.
+Section NestDef.
   Context `{SS: setoid Shape} {Pf Pg : Type}
     (F : Cont Shape Pf) (G : Cont Shape Pg) `{SX : setoid X}.
 
@@ -229,7 +234,7 @@ Section Nest.
 
   #[export]
     Instance Nest : Cont (App F X) Pg := { valid := nest_v }.
-End Nest.
+End NestDef.
 Arguments Nest {Sh Esh Pf Pg} F G X {eX} : rename.
 
 Section NaturalTransformation.

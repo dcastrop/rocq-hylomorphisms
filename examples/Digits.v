@@ -1,11 +1,12 @@
+Set Warnings "-disj-pattern-notation,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
+Require Import Hylo.Hylo.
+Require Import Hylo.Lists.
+Require Import Hylo.Extraction.Specialise.
 
-Require Import Hylo.Examples.CList.
 
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Lia.
@@ -17,15 +18,15 @@ Definition digits_ (b n : int) : App (ListF int) int :=
   MkCont (if n =? 0 then s_nil else s_cons (n mod b)) (fun _ => n / b).
 
 Lemma digits_fin b (Hb : (1 <? b) = true)
-  : respects_relation (digits_ b) (fun n => Z.to_nat (φ n)) lt.
+  : respects_relation (digits_ b) (fun n => Z.to_nat (to_Z n)) lt.
 Proof.
   intros n p; simpl in *; revert p; unfold digits_.
   destruct (n =? 0) eqn:E; intros p; simpl in *.
   - destruct (dom_nil_false p).
   - apply ltb_spec in Hb; apply eqb_false_spec in E; rewrite div_spec.
-    assert (Hn : (0 < φ n)%Z).
+    assert (Hn : (0 < to_Z n)%Z).
     { pose proof (to_Z_bounded n).
-      assert (φ n <> 0)%Z by (intros H'; apply E, to_Z_inj; exact H'); lia. }
+      assert (to_Z n <> 0)%Z by (intros H'; apply E, to_Z_inj; exact H'); lia. }
     pose proof (Z.div_lt _ _ Hn Hb); lia.
 Qed.
 
@@ -74,10 +75,12 @@ Definition power (x : int) : int ~> int :=
 Definition sumsq : int ~> int :=
   cata sum_alg \o Lmap sq \o rana (digits 10 eq_refl).
 
+#[local] Hint Unfold digits digits_ pow_alg sum_alg : unfold_code.
+
 Section FastPower.
   Variable x : int.
 
-  Derive fast_power in (power x =e fast_power) as fast_power_calc.
+  Derive fast_power in (power x =e morph_of fast_power) as fast_power_calc.
   Proof.
     unfold power.
     rewrite cata_ana_hylo.
@@ -85,7 +88,7 @@ Section FastPower.
   Qed.
 End FastPower.
 
-Derive sumsq_fold in (sumsq =e sumsq_fold) as sumsq_fold_calc.
+Derive sumsq_fold in (sumsq =e morph_of sumsq_fold) as sumsq_fold_calc.
 Proof.
   unfold sumsq, Lmap, everywhere, List.
   rewrite hylo_cata, hylo_map_fusion.
@@ -93,7 +96,8 @@ Proof.
   finished.
 Qed.
 
-Derive sumsq_unfold in (sumsq =e sumsq_unfold) as sumsq_unfold_calc.
+Derive sumsq_unfold in (sumsq =e morph_of sumsq_unfold)
+  as sumsq_unfold_calc.
 Proof.
   unfold sumsq, Lmap, everywhere, List.
   rewrite hylo_cata, hylo_map_fusion.

@@ -1,12 +1,13 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
+Require Import Hylo.Hylo.
 
 Require Import Hylo.Examples.BTree.
+Require Import Hylo.Extraction.Specialise.
 
 From Stdlib Require Import List.
 From Stdlib Require Import Uint63.
@@ -52,9 +53,15 @@ Proof.
   unfold Lmap, posL, posR; rewrite map_app; simpl; eq_args.
 Qed.
 
-Derive qsort in (cata merge \o rana tsplit =e qsort) as qsort_calc.
+(* The CPS split: the cases of [c_split], passing each layer to [k] *)
+Definition tsplit_k : CCoalg tsplit.
+Proof. cps_from_coalg. Defined.
+
+#[local] Hint Unfold merge tsplit c_split tsplit_k : unfold_code.
+
+Derive qsort in (cata merge \o rana tsplit =e morph_of qsort) as qsort_calc.
 Proof.
-  rewrite cata_ana_hylo.
+  rewrite cata_ana_hylo, <- (hylo_cps_hylo merge tsplit_k).
   finished.
 Qed.
 
@@ -72,11 +79,14 @@ Proof.
   arewrite <- (cata_unfold merge); reflexivity.
 Qed.
 
+#[local] Hint Unfold times_two : unfold_code.
+
 Derive qsort_times_two
-  in (Lmap times_two \o cata merge \o rana tsplit =e qsort_times_two)
+  in (Lmap times_two \o cata merge \o rana tsplit =e morph_of qsort_times_two)
   as qsort_times_two_calc.
 Proof.
   rewrite map_merge_fusion, hylo_ana, deforest by apply l_out_in.
+  rewrite <- (hylo_cps_hylo _ tsplit_k).
   finished.
 Qed.
 

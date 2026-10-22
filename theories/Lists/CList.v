@@ -1,10 +1,10 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
-Require Import Hylo.FiniteCont.
+Require Import Hylo.Core.
+Require Import Hylo.Schemes.
 
 From Stdlib Require List.
 
@@ -106,6 +106,10 @@ Definition ilist_coalg {A} (x : list A) : App (ListF A) (list A) :=
 Arguments ilist_coalg {A} x /.
 Lemma ilist_coalg_rec `{Leibniz A} : RecP (@ilist_coalg A).
 Proof. intros x; induction x; constructor; auto with ffix. Defined.
+
+#[export] Hint Unfold
+  ilist_coalg ilist_alg ListF_finite l_members : unfold_code.
+#[export] Hint Unfold natural_list l_map_shape : unfold_code.
 
 #[export] Instance ilist_coalg_terminates `{Leibniz A}
   : Terminates (@ilist_coalg A) := ilist_coalg_rec.

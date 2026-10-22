@@ -1,14 +1,15 @@
+Set Warnings "-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-Require Import Hylo.Equivalence.
-Require Import Hylo.Morphism.
-Require Import Hylo.Container.
-Require Import Hylo.Coalgebra.
-Require Import Hylo.FCoalgebra.
+Require Import Hylo.Core.Equivalence.
+Require Import Hylo.Core.Morphism.
+Require Import Hylo.Core.Container.
+Require Import Hylo.Core.Coalgebra.
+Require Import Hylo.Core.FCoalgebra.
 
 From Stdlib Require Extraction.
 
@@ -23,6 +24,7 @@ Canonical Structure proper_morph.
 Extraction Inline proper_morph.
 
 (** Termination of a coalgebra, as a typeclass. *)
+#[mode = "- - - - - - -"]
 Class Terminates `{F : Cont Sh P} `{eA : setoid A} (c : Coalg F A) : Prop :=
   terminates : RecP c.
 
@@ -135,7 +137,9 @@ Ltac proper_step :=
   first [ reflexivity
         | assumption
         | progress intros
-        | match goal with |- context [match ?s with _ => _ end] => is_var s; destruct s end
+        | match goal with
+          | |- context [match ?s with _ => _ end] => is_var s; destruct s
+          end
         | match goal with |- context [if ?c then _ else _] => destruct c end
         | solve [apply leibniz; assumption]
         | progress (simpl; f_equal)
@@ -145,7 +149,9 @@ Ltac proper_step :=
           let v2 := fresh "v" in let V2 := fresh "V" in
           let Hv := fresh "Hv" in
           intros [v1 V1] [v2 V2] Hv; simpl in *
-        | match goal with Ek : forall _ _, val _ = val _ -> _ |- _ => apply Ek end ].
+        | match goal with
+          | Ek : forall _ _, val _ = val _ -> _ |- _ => apply Ek
+          end ].
 
 (* At most [n] steps on each goal, so that the search always terminates *)
 Ltac proper_steps n :=
@@ -172,5 +178,7 @@ Ltac proper_poly :=
   * proving it proper with [proper_poly]. If that fails (or takes more than 5
   * seconds), the proof is left as an obligation ([Next Obligation]). Other
   * obligations get the default tactic. *)
-Notation "'morphism' f" := (@MkMorph _ _ _ _ f%function _) (at level 10, f at level 200).
-#[export] Obligation Tactic := first [solve [timeout 5 proper_poly] | Tactics.program_simpl].
+Notation "'morphism' f" := (@MkMorph _ _ _ _ f%function _)
+  (at level 10, f at level 200).
+#[export] Obligation Tactic :=
+  first [solve [timeout 5 proper_poly] | Tactics.program_simpl].

@@ -1,16 +1,20 @@
+Set Warnings "-bad-template-constraint,-disj-pattern-notation".
+Set Warnings "-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
-Require Import Hylo.Dyna.
+Require Import Hylo.Core.
+Require Import Hylo.Schemes.
+Require Import Hylo.Dyna.Memo.
+Require Import Hylo.Dyna.Chain.
 
 From Stdlib Require Import List.
 From Stdlib Require Import Uint63.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Lia.
+From Stdlib Require Import ZifyUint63.
 From Stdlib Require Import PArray.
 
 (** * Memo tables for [NatF] as persistent arrays
@@ -27,7 +31,8 @@ Proof. intros Hn; unfold ix; rewrite Uint63.of_Z_spec, Z.mod_small; lia. Qed.
 
 Lemma ix_to_nat (n : int) : ix (Z.to_nat (Uint63.to_Z n)) = n.
 Proof.
-  unfold ix; rewrite Z2Nat.id by (apply Uint63.to_Z_bounded); apply Uint63.of_to_Z.
+  unfold ix; rewrite Z2Nat.id by (apply Uint63.to_Z_bounded).
+  apply Uint63.of_to_Z.
 Qed.
 
 Lemma to_nat_pred (n : int) : (n =? 0)%uint63 = false ->
@@ -38,7 +43,8 @@ Proof. intros E; pose proof (int_pred_lt E); pose proof (Uint63.to_Z_bounded n).
 Qed.
 
 (* Memo tables as arrays: the entries of [blk] at [top], ..., [0] (newest
-   first), followed by [prev]. New blocks have [max_length] entries, filled
+   first), followed by [prev]. The first block has 16 entries, and each new
+   block twice the entries of the previous one (up to [max_length]), filled
    with the first value written. *)
 #[warnings="-register-all"]
 Inductive ATab := MkATab { blk : array A; top : int; prev : option ATab }.
@@ -61,20 +67,22 @@ Fixpoint to_list (t : ATab) : list A :=
   |}.
 #[export] Instance ATab_no_def_eq : NoDefEq ATab := {}.
 
-Definition single (v : A) : ATab := MkATab (make max_length v) 0 None.
+Definition single (v : A) : ATab := MkATab (make 16 v) 0 None.
 
 (* [i <? length b] rules out the overflow of [i + 1] *)
 Definition push (v : A) (t : ATab) : ATab :=
   match t with
   | MkATab b i p =>
-      if ((i <? length b)%uint63 && (i + 1 <? length b)%uint63)%bool then MkATab b.[i + 1 <- v] (i + 1) p
-      else MkATab (make max_length v) 0 (Some t)
+      if ((i <? length b)%uint63 && (i + 1 <? length b)%uint63)%bool
+      then MkATab b.[i + 1 <- v] (i + 1) p
+      else MkATab (make (length b + length b) v) 0 (Some t)
   end.
 
 Definition head (t : ATab) : A := (blk t).[top t].
 
 Definition is_last (t : ATab) : bool :=
-  ((top t =? 0)%uint63 && match prev t with None => true | Some _ => false end)%bool.
+  ((top t =? 0)%uint63
+   && match prev t with None => true | Some _ => false end)%bool.
 
 Definition rest (t : ATab) : ATab :=
   match t with
@@ -98,7 +106,8 @@ Lemma blk_list_set b c v k
 Proof.
   intros Hk Hc; induction k as [|k Ih]; cbn [blk_list]; [|rewrite Ih by lia];
     rewrite get_set_other; trivial;
-    intros E; apply (Logic.f_equal Uint63.to_Z) in E; rewrite !ix_spec in E by lia; lia.
+    intros E; apply (Logic.f_equal Uint63.to_Z) in E;
+    rewrite !ix_spec in E by lia; lia.
 Qed.
 
 Lemma to_list_single v : to_list (single v) = v :: nil.
@@ -112,11 +121,14 @@ Proof.
   destruct t as [b i p]; unfold push.
   destruct ((i <? length b)%uint63 && (i + 1 <? length b)%uint63)%bool eqn:E.
   - apply andb_prop in E as [E1 E2]; apply Uint63.ltb_spec in E1, E2.
-    pose proof (Uint63.to_Z_bounded i); pose proof (Uint63.to_Z_bounded (length b)).
+    pose proof (Uint63.to_Z_bounded i).
+    pose proof (Uint63.to_Z_bounded (length b)).
     assert (Hs : Uint63.to_Z (i + 1) = (Uint63.to_Z i + 1)%Z).
-    { rewrite Uint63.add_spec; change (Uint63.to_Z 1) with 1%Z; apply Z.mod_small; lia. }
-    cbn [to_list]; replace (Z.to_nat (Uint63.to_Z (i + 1))) with (S (Z.to_nat (Uint63.to_Z i)))
-      by lia.
+    { rewrite Uint63.add_spec; change (Uint63.to_Z 1) with 1%Z.
+      apply Z.mod_small; lia. }
+    cbn [to_list].
+    replace (Z.to_nat (Uint63.to_Z (i + 1)))
+      with (S (Z.to_nat (Uint63.to_Z i))) by lia.
     cbn [blk_list app].
     assert (Ei : ix (S (Z.to_nat (Uint63.to_Z i))) = (i + 1)%uint63).
     { apply Uint63.to_Z_inj; rewrite ix_spec, Hs; lia. }
@@ -132,7 +144,8 @@ Proof. rewrite to_list_out; eauto. Qed.
 Lemma head_list (x : A) t : head t = hd x (to_list t).
 Proof. rewrite to_list_out; reflexivity. Qed.
 
-Lemma is_last_list t : is_last t = match to_list t with _ :: nil => true | _ => false end.
+Lemma is_last_list t
+  : is_last t = match to_list t with _ :: nil => true | _ => false end.
 Proof.
   rewrite to_list_out; destruct (is_last t); [reflexivity|].
   destruct (to_list_cons (rest t)) as [v [l E]]; rewrite E; reflexivity.
@@ -148,10 +161,13 @@ Lemma atab_out_morph : forall t1 t2, t1 =e t2 -> atab_out_ t1 =e atab_out_ t2.
 Proof.
   intros t1 t2 E; change (to_list t1 = to_list t2) in E.
   assert (Eh : head t1 = head t2)
-    by (rewrite (head_list (head t1) t1), (head_list (head t1) t2), E; reflexivity).
-  assert (El : is_last t1 = is_last t2) by (rewrite !is_last_list, E; reflexivity).
+    by (rewrite (head_list (head t1) t1), (head_list (head t1) t2), E;
+        reflexivity).
+  assert (El : is_last t1 = is_last t2)
+    by (rewrite !is_last_list, E; reflexivity).
   unfold atab_out_; split; cbn [shape cont]; [rewrite Eh, El; reflexivity|].
-  rewrite <- El; destruct (is_last t1) eqn:L1; [intros [[[]|[]] V]; discriminate V|].
+  rewrite <- El; destruct (is_last t1) eqn:L1;
+    [intros [[[]|[]] V]; discriminate V|].
   intros _ _ _; change (to_list (rest t1) = to_list (rest t2)).
   rewrite (rest_list L1), (rest_list (eq_sym El)), E; reflexivity.
 Qed.
@@ -166,21 +182,27 @@ Proof.
   intros _; rewrite (to_list_out t), L; cbn [List.length]; lia.
 Qed.
 
-Definition atab_out : RCoalg (Memo NatF A) ATab := mk_wf_coalg wf_lt atab_out_fin.
+Definition atab_out : RCoalg (Memo NatF A) ATab :=
+  mk_wf_coalg wf_lt atab_out_fin.
+
+(* The position of the only child of a [NatF] layer *)
+#[local] Abbreviation pnext := (MkElem (inr tt) (loop_step_valid unit)).
 
 Definition atab_in_ (x : App (Memo NatF A) ATab) : ATab :=
   match x with
   | MkCont (v, inl tt) _ => single v
-  | MkCont (v, inr tt) k => push v (k (MkElem (inr tt) valid_inr_tt))
+  | MkCont (v, inr tt) k => push v (k pnext)
   end.
 
 Lemma atab_in_morph : forall x y, x =e y -> atab_in_ x =e atab_in_ y.
 Proof.
-  intros [[v sx] kx] [[w sy] ky] [[Ev Es] Ek]; cbn in Ev, Es; apply leibniz in Ev; subst w.
-  destruct sx as [[]|[]], sy as [[]|[]]; cbn in Es; try discriminate Es; try contradiction.
+  intros [[v sx] kx] [[w sy] ky] [[Ev Es] Ek]; cbn in Ev, Es;
+    apply leibniz in Ev; subst w.
+  destruct sx as [[]|[]], sy as [[]|[]]; cbn in Es; try discriminate Es;
+    try contradiction.
   - reflexivity.
-  - change (to_list (push v (kx (MkElem (inr tt) valid_inr_tt)))
-            = to_list (push v (ky (MkElem (inr tt) valid_inr_tt)))).
+  - change (to_list (push v (kx pnext))
+            = to_list (push v (ky pnext))).
     rewrite !to_list_push; f_equal; apply Ek; reflexivity.
 Qed.
 
@@ -188,33 +210,74 @@ Definition atab_in : App (Memo NatF A) ATab ~> ATab := MkMorph atab_in_morph.
 
 Lemma atab_in_out : atab_in \o atab_out =e id.
 Proof.
-  intros t; change (to_list (atab_in_ (atab_out_ t)) = to_list t); unfold atab_out_.
-  destruct (is_last t) eqn:L; cbn [atab_in_];
-    [rewrite to_list_single | rewrite to_list_push]; rewrite (to_list_out t), L; reflexivity.
+  intros t; change (to_list (atab_in_ (atab_out_ t)) = to_list t).
+  unfold atab_out_; destruct (is_last t) eqn:L; cbn [atab_in_];
+    [rewrite to_list_single | rewrite to_list_push];
+    rewrite (to_list_out t), L; reflexivity.
 Qed.
 
 Lemma atab_out_in : atab_out \o atab_in =e id.
 Proof.
-  intros [[v [[]|[]]] k]; change (atab_out_ (atab_in_ (MkCont (v, _) k)) =e MkCont (v, _) k);
+  intros [[v [[]|[]]] k];
+    change (atab_out_ (atab_in_ (MkCont (v, _) k)) =e MkCont (v, _) k);
     cbn [atab_in_]; unfold atab_out_; split; cbn [shape cont].
   - rewrite (head_list v), is_last_list, to_list_single; reflexivity.
   - intros e1 [[[]|[]] V]; discriminate V.
-  - destruct (to_list_cons (k (MkElem (inr tt) valid_inr_tt))) as [w [l E]].
+  - destruct (to_list_cons (k pnext)) as [w [l E]].
     rewrite (head_list v), is_last_list, to_list_push, E; reflexivity.
-  - assert (L : is_last (push v (k (MkElem (inr tt) valid_inr_tt))) = false).
-    { destruct (to_list_cons (k (MkElem (inr tt) valid_inr_tt))) as [w [l E]].
+  - assert (L : is_last (push v (k pnext)) = false).
+    { destruct (to_list_cons (k pnext)) as [w [l E]].
       rewrite is_last_list, to_list_push, E; reflexivity. }
     intros e1 [[[]|[]] V] _; try discriminate V.
-    change (to_list (rest (push v (k (MkElem (inr tt) valid_inr_tt))))
+    change (to_list (rest (push v (k pnext)))
             = to_list (k (MkElem (inr tt) V))).
     rewrite rest_list, to_list_push by exact L; cbn [tl].
     do 2 f_equal; apply elem_val_eq; reflexivity.
 Qed.
 
 Definition ATab_initial : Initial (Memo NatF A) ATab :=
-  {| l_in := atab_in; l_out := atab_out; l_in_out := atab_in_out; l_out_in := atab_out_in |}.
+  {| l_in := atab_in; l_out := atab_out;
+     l_in_out := atab_in_out; l_out_in := atab_out_in |}.
 Existing Instance ATab_initial.
+
+(** Random access: [jump n t] skips [n] entries of [t] at once in a block *)
+Fixpoint jump (n : int) (t : ATab) : option ATab :=
+  match t with
+  | MkATab b i p =>
+      if (n <=? i)%uint63 then Some (MkATab b (i - n) p)
+      else match p with Some q => jump (n - i - 1) q | None => None end
+  end.
+
+Lemma jump_unfold n t
+  : jump n t = if (n =? 0)%uint63 then Some t
+               else if is_last t then None else jump (n - 1) (rest t).
+Proof.
+  destruct t as [b i [q|]]; unfold is_last, rest; cbn [top prev];
+    destruct (i =? 0)%uint63 eqn:?; cbn [jump]; int_cases.
+Qed.
+
+Lemma jump_walk : forall n t, jump n t =e iwalk (mtail \o l_out) n t.
+Proof.
+  intros n; remember (Z.to_nat (Uint63.to_Z n)) as m eqn:Em; revert n Em.
+  induction m as [|m Ih]; intros n Em t;
+    rewrite (iwalk_unfold _ n), jump_unfold; unfold out_int;
+    destruct (n =? 0)%uint63 eqn:En; cbn -[iwalk jump]; try (exfalso; lia);
+    [reflexivity|].
+  destruct (is_last t); cbn -[iwalk jump]; [reflexivity | apply Ih; lia].
+Qed.
+
+Definition fast_drop (j : int) (t : ATab) : option ATab :=
+  if (j =? 0)%uint63 then None else jump (j - 1) t.
+
+Lemma fast_drop_walk j t
+  : fast_drop j t =e iwalk_child (mtail \o l_out) j t.
+Proof.
+  unfold fast_drop, iwalk_child; destruct (j =? 0)%uint63;
+    [exact I | apply jump_walk].
+Qed.
 
 End NatTables.
 Arguments ATab : clear implicits.
 #[export] Existing Instance ATab_initial.
+#[export] Hint Unfold
+  ATab_initial atab_out atab_out_c atab_out_ atab_in atab_in_ : unfold_code.

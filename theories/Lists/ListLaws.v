@@ -1,32 +1,57 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
-Require Import Hylo.FiniteCont.
-Require Import Hylo.MonoidAlg.
+Require Import Hylo.Core.
+Require Import Hylo.Schemes.
+Require Import Hylo.Lists.CList.
 
-Require Import Hylo.Examples.CList.
 
 From Stdlib Require Import List.
 
+Section Foldr.
+  Context `{Leibniz A}.
+
+  Definition foldr_alg `{setoid B} (f : A ~> B ~> B) (e : B)
+    : App (ListF A) B ~> B :=
+    morph_of (fun x : App (ListF A) B =>
+      match x with
+      | MkCont s k =>
+          match s as s return (Container.Pos (ListF A) s -> B) -> B with
+          | s_nil => fun _ => e
+          | s_cons a => fun k => f a (k (MkElem tt (p_cons eq_refl)))
+          end k
+      end).
+
+  Definition foldr `{setoid B} (f : A ~> B ~> B) (e : B) : list A ~> B :=
+    hylo (foldr_alg f e) ilist_coalg.
+End Foldr.
+
+#[export] Hint Unfold foldr foldr_alg : unfold_code.
+
+Lemma foldr_nil `{Leibniz A} `{setoid B} (f : A ~> B ~> B) e
+  : foldr f e nil =e e.
+Proof. unfold foldr; rewrite hylo_unr; reflexivity. Qed.
+
+Lemma foldr_cons `{Leibniz A} `{setoid B} (f : A ~> B ~> B) e a l
+  : foldr f e (a :: l) =e f a (foldr f e l).
+Proof. unfold foldr; rewrite hylo_unr at 1; reflexivity. Qed.
+
+(** Monoid reductions are folds *)
 Section Reduce.
   Context `{Leibniz A} `{setoid W} (M : Monoid W).
 
-  Definition cons_leaf (w : A ~> W) : Lshape A ~> option W :=
-    morph_of (fun s => match s with s_nil => None | s_cons a => Some (w a) end).
-
-  Definition reduce (w : A ~> W) : list A ~> W :=
-    hylo (malg (ListF A) M (cons_leaf w)) ilist_coalg.
+  Definition reduce (w : A ~> W) : list A ~> W := foldr (par M \o w) <0>.
 
   Lemma reduce_nil (w : A ~> W) : reduce w nil =e <0>.
-  Proof. unfold reduce; rewrite hylo_unr; reflexivity. Qed.
+  Proof. apply foldr_nil. Qed.
 
   Lemma reduce_cons (w : A ~> W) a l : reduce w (a :: l) =e w a <+> reduce w l.
-  Proof. unfold reduce; rewrite hylo_unr at 1; reflexivity. Qed.
+  Proof. unfold reduce; rewrite foldr_cons; reflexivity. Qed.
 End Reduce.
 Arguments reduce : simpl never.
+#[export] Hint Unfold reduce : unfold_code.
 
 Section ReduceLaws.
   Context `{Leibniz A} `{setoid W} (M : Monoid W).
@@ -69,11 +94,15 @@ Definition lmap `{Leibniz A} `{Leibniz B} (f : A ~> B) : list A ~> list B :=
   reduce list_monoid (sing \o f).
 Arguments lmap : simpl never.
 
-Definition concat `{Leibniz A} : list (list A) ~> list A := reduce list_monoid id.
+Definition concat `{Leibniz A} : list (list A) ~> list A :=
+  reduce list_monoid id.
 
 Lemma reduce_sing `{Leibniz A} `{setoid W} (M : Monoid W) (w : A ~> W)
   : reduce M w \o sing =e w.
-Proof. intros a; cbn [Morphism.app comp sing]; rewrite reduce_cons, reduce_nil, par_skip_r; reflexivity. Qed.
+Proof.
+  intros a; cbn [Morphism.app comp sing].
+  rewrite reduce_cons, reduce_nil, par_skip_r; reflexivity.
+Qed.
 
 Section Promotion.
   Context `{Leibniz A} `{Leibniz W} (M : Monoid W).
@@ -81,7 +110,8 @@ Section Promotion.
   Lemma promotion (h : list A ~> W) (Hh : MonoidHom list_monoid M h)
     : h \o concat =e reduce M id \o lmap h.
   Proof.
-    unfold concat, lmap; rewrite (reduce_fusion Hh), (reduce_fusion (reduce_hom M id)).
+    unfold concat, lmap.
+    rewrite (reduce_fusion Hh), (reduce_fusion (reduce_hom M id)).
     apply reduce_proper; intros x; cbn [Morphism.app comp sing].
     rewrite reduce_cons, reduce_nil, par_skip_r; reflexivity.
   Qed.
@@ -138,29 +168,52 @@ Proof.
     [reflexivity|]; rewrite Ih; reflexivity.
 Qed.
 
+(** Elements without a value contribute the unit *)
+Lemma reduce_map_some `{Leibniz A} `{Leibniz B} `{Leibniz W} (M : Monoid W)
+  (w : B ~> W) (h : A -> option B) l
+  : reduce M w (map_some h l)
+    = reduce M (morph_of (fun x => match h x with
+                                   | Some y => w y
+                                   | None => <0>[M] end)) l.
+Proof.
+  apply leibniz; induction l as [|a l Ih]; cbn [map_some];
+    [|destruct (h a) eqn:Ea]; rewrite ?reduce_nil, ?reduce_cons, ?Ih; cbn;
+    rewrite ?Ea, ?par_skip_l; reflexivity.
+Qed.
+
+Lemma reduce_ext `{Leibniz A} `{Leibniz W} (M : Monoid W) (w : A ~> W)
+  (f : A -> W) l
+  : (forall x, w x = f x) -> reduce M w l = reduce M (morph_of f) l.
+Proof.
+  intros E; apply leibniz, reduce_proper; intros x; apply eq_leibniz, E.
+Qed.
+
+#[export] Instance map_some_proper {X Y}
+  : Proper (pointwise_relation X eq ==> eq ==> eq) (@map_some X Y).
+Proof. intros f g E l l' <-; apply map_some_ext, E. Qed.
+
+(** Fusing a partial map into a reduction *)
+Lemma reduce_map_option `{Leibniz A} `{Leibniz B} `{Leibniz W} {C}
+  (M : Monoid W) (w : B ~> W) (f : A -> C -> B) (h : A -> option C) l
+  : reduce M w (map_some (fun x => option_map (f x) (h x)) l)
+    = reduce M (morph_of (fun x => match h x with
+                                   | Some y => w (f x y)
+                                   | None => <0>[M] end)) l.
+Proof.
+  rewrite reduce_map_some; apply reduce_ext; intros x; cbn [Morphism.app].
+  destruct (h x); reflexivity.
+Qed.
+
 Section Folds.
   Context `{Leibniz A}.
-
-  Definition foldr_alg `{setoid B} (f : A ~> B ~> B) (e : B)
-    : App (ListF A) B ~> B :=
-    morph_of (fun x : App (ListF A) B =>
-      match x with
-      | MkCont s k =>
-          match s as s return (Container.Pos (ListF A) s -> B) -> B with
-          | s_nil => fun _ => e
-          | s_cons a => fun k => f a (k (MkElem tt (p_cons eq_refl)))
-          end k
-      end).
-
-  Definition foldr `{setoid B} (f : A ~> B ~> B) (e : B) : list A ~> B :=
-    hylo (foldr_alg f e) ilist_coalg.
 
   Definition scan_alg `{Leibniz B} (f : A ~> B ~> B) (e : B)
     : App (ListF A) (list B) ~> list B :=
     morph_of (fun x : App (ListF A) (list B) =>
       match x with
       | MkCont s k =>
-          match s as s return (Container.Pos (ListF A) s -> list B) -> list B with
+          match s as s
+            return (Container.Pos (ListF A) s -> list B) -> list B with
           | s_nil => fun _ => e :: nil
           | s_cons a => fun k =>
               let zs := k (MkElem tt (p_cons eq_refl)) in f a (hd e zs) :: zs
@@ -177,7 +230,8 @@ Section Folds.
           match s as s return (Container.Pos (ListF A) s -> _) -> _ with
           | s_nil => fun _ => nil :: nil
           | s_cons a => fun k =>
-              let yss := k (MkElem tt (p_cons eq_refl)) in (a :: hd nil yss) :: yss
+              let yss := k (MkElem tt (p_cons eq_refl)) in
+              (a :: hd nil yss) :: yss
           end k
       end).
 
@@ -191,19 +245,14 @@ Section Folds.
       | MkCont s k =>
           match s as s return (Container.Pos (ListF A) s -> _) -> _ with
           | s_nil => fun _ => nil :: nil
-          | s_cons a => fun k => nil :: map (cons_m a) (k (MkElem tt (p_cons eq_refl)))
+          | s_cons a => fun k =>
+              nil :: map (cons_m a) (k (MkElem tt (p_cons eq_refl)))
           end k
       end).
 
   Definition inits : list A ~> list (list A) := hylo inits_alg ilist_coalg.
 End Folds.
 
-Lemma foldr_nil `{Leibniz A} `{setoid B} (f : A ~> B ~> B) e : foldr f e nil =e e.
-Proof. unfold foldr; rewrite hylo_unr; reflexivity. Qed.
-
-Lemma foldr_cons `{Leibniz A} `{setoid B} (f : A ~> B ~> B) e a l
-  : foldr f e (a :: l) =e f a (foldr f e l).
-Proof. unfold foldr; rewrite hylo_unr at 1; reflexivity. Qed.
 
 Section FoldLaws.
   Context `{Leibniz A}.
@@ -240,13 +289,17 @@ Section Horner.
   Proof.
     rewrite reduce_lmap; unfold inits, foldr; apply hylo_fusion_l.
     intros [[|a] k]; cbn -[lmap foldr reduce].
-    - rewrite reduce_cons, reduce_nil, par_skip_r; cbn -[reduce]; rewrite reduce_nil; reflexivity.
+    - rewrite reduce_cons, reduce_nil, par_skip_r; cbn -[reduce].
+      rewrite reduce_nil; reflexivity.
     - rewrite reduce_cons, reduce_map.
       assert (E : reduce (sadd S) ((id \o reduce (smul S) id) \o cons_m a)
-                  =e reduce (sadd S) (par (smul S) a \o (id \o reduce (smul S) id)))
-        by (apply reduce_proper; intros ys; cbn -[reduce]; rewrite reduce_cons; reflexivity).
+                  =e reduce (sadd S)
+                       (par (smul S) a \o (id \o reduce (smul S) id)))
+        by (apply reduce_proper; intros ys; cbn -[reduce];
+            rewrite reduce_cons; reflexivity).
       rewrite E.
-      rewrite <- (reduce_fusion (smul_hom S a)); cbn -[reduce]; rewrite reduce_nil; reflexivity.
+      rewrite <- (reduce_fusion (smul_hom S a)); cbn -[reduce].
+      rewrite reduce_nil; reflexivity.
   Qed.
 End Horner.
 
@@ -265,7 +318,8 @@ Section Tupling.
   Lemma scan_tupling (f : A ~> B ~> B) (e : B)
     : reduce M id \o scanr f e =e fst \o foldr (tup_step f) (e, e).
   Proof.
-    assert (E : pair (reduce M id) (hd_m e) \o scanr f e =e foldr (tup_step f) (e, e)).
+    assert (E : pair (reduce M id) (hd_m e) \o scanr f e
+                =e foldr (tup_step f) (e, e)).
     { unfold scanr, foldr; apply hylo_fusion_l; intros [[|a] k];
         cbn -[reduce]; unfold tup; cbn -[reduce]; split;
         rewrite ?reduce_cons, ?reduce_nil, ?par_skip_r; reflexivity. }

@@ -1,13 +1,14 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-Require Import Hylo.Equivalence.
-Require Import Hylo.Morphism.
-Require Import Hylo.Container.
-Require Import Hylo.Coalgebra.
+Require Import Hylo.Core.Equivalence.
+Require Import Hylo.Core.Morphism.
+Require Import Hylo.Core.Container.
+Require Import Hylo.Core.Coalgebra.
 
 From Stdlib Require Extraction.
 
@@ -185,11 +186,13 @@ Section CAlgDef.
 
   Lemma lg_out_rec : RecP lg_out.
   Proof.
-    intros [x Fx]; revert x Fx; fix Ih 2; intros x [x' Fx]; constructor; intros e.
+    intros [x Fx]; revert x Fx; fix Ih 2; intros x [x' Fx]; constructor.
+    intros e.
     exact (Ih _ (Fx e)).
   Defined.
 
-  Definition lg_out_c : RCoalg F {x : GFix F | FinF x} := Rec (coalg := lg_out) lg_out_rec.
+  Definition lg_out_c : RCoalg F {x : GFix F | FinF x} :=
+    Rec (coalg := lg_out) lg_out_rec.
 End CAlgDef.
 
 

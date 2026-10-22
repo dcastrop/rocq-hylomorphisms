@@ -5,7 +5,7 @@
  (prelude ExtrMSS)
  (extracted_modules mss)
  (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction)
- (flags :standard -w -extraction-default-directory))
+ (flags :standard -w +all))
 
 (library
  (name extracted_mss)

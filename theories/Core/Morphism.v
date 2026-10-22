@@ -4,7 +4,7 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-Require Import Hylo.Equivalence.
+Require Import Hylo.Core.Equivalence.
 
 From Stdlib Require Export Morphisms.
 
@@ -48,6 +48,13 @@ Lemma f_equal `{setoid A} `{setoid B} (f g : A ~> B)
   : forall x, f =e g -> f x =e g x.
 Proof. intros x E. apply E. Qed.
 
+Lemma option_map_eq `{setoid X} `{setoid Y} (f : X ~> Y) (o1 o2 : option X)
+  : o1 =e o2 -> option_map f o1 =e option_map f o2.
+Proof. destruct o1, o2; cbn; try contradiction; [apply app_eq | trivial]. Qed.
+
+#[export] Instance option_map_proper `{setoid X} `{setoid Y} (f : X ~> Y)
+  : Proper (eqRel ==> eqRel) (option_map f) := option_map_eq f.
+
 Add Parametric Morphism `{eA : setoid A} `{eB : setoid B}
   : (@app A eA B eB)
     with signature
@@ -65,7 +72,7 @@ Add Parametric Morphism `{eA : setoid A} `{eB : setoid B}
       as appMorphism2.
 Proof. intros ?? E; apply E. Qed.
 
-Section Id.
+Section IdDef.
   Context `{eA : setoid A}.
 
   Abbreviation id_ := (fun x => x).
@@ -74,7 +81,7 @@ Section Id.
   Proof. auto. Qed.
 
   Definition id : A ~> A := {| app := _; app_eq := id_eq |}.
-End Id.
+End IdDef.
 
 Section Const.
   Context `{eA : setoid A} `{eB : setoid B}.
@@ -440,10 +447,29 @@ Section SpecDef.
       }.
 End SpecDef.
 
-(** Calculations use [Derive f in (spec =e f) as f_calc]: rewrite [spec] step
+(** Calculations use [Derive f in (spec =e f) as f_calc], or
+  * [spec =e morph_of f] to derive a plain function [f]: rewrite [spec] step
   * by step, then [finished] instantiates [f] with the result. [f] is
-  * transparent and [f_calc] opaque. *)
-Ltac finished := lazymatch goal with |- _ =e ?f => subst f end; reflexivity.
+  * transparent and [f_calc] opaque. Before that, [specialise] may rewrite the
+  * result: it does nothing here, and the extraction modules redefine it to
+  * reduce the result to the code to extract, unfolding [unfold_code]. *)
+Create HintDb unfold_code.
+Ltac specialise := idtac.
+Ltac finished :=
+  lazymatch goal with
+  | |- _ =e @MkMorph _ _ _ _ ?f _ => subst f
+  | |- _ =e ?f => subst f
+  end;
+  specialise;
+  lazymatch goal with
+  | |- ?t =e @MkMorph _ _ _ _ ?f _ =>
+      let g := lazymatch t with
+               | @MkMorph _ _ _ _ ?g _ => g
+               | _ => constr:(fun x => app t x)
+               end in
+      unify f g; intros ?; reflexivity
+  | |- _ => reflexivity
+  end.
 
 (** For [Derive f in (t = f L) as f_calc]: instantiates [f] with [t]
   * abstracted over [L] *)

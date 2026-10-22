@@ -1,16 +1,12 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-From Hylo Require Import Equivalence.
-From Hylo Require Import Morphism.
-From Hylo Require Import Container.
-From Hylo Require Import Coalgebra.
-From Hylo Require Import FCoalgebra.
-From Hylo Require Import Hylomorphisms.
-From Hylo Require Import FiniteCont.
+Require Import Hylo.Core.
+Require Import Hylo.Schemes.Hylomorphisms.
 
 From Stdlib Require Import List.
 
@@ -35,7 +31,8 @@ Arguments Monoid W {_}.
   * fail if there are several, and then [a <+>[ M ] b] and [<0>[ M ]] name it.
   * [MonoidOf] is never the type of a hypothesis, so its only instances come
   * from [unique_monoid]. A concrete monoid is opened with
-  * [#[local] Hint Extern 0 (@MonoidOf T _) => exact M : typeclass_instances]. *)
+  * [#[local] Hint Extern 0 (@MonoidOf T _) => exact M
+  *    : typeclass_instances]. *)
 
 #[mode = "! -"]
 Class MonoidOf W `{setoid W} := monoid_of : Monoid W.
@@ -73,7 +70,8 @@ Record Semiring `{eW : setoid W} :=
     { sadd : Monoid W;
       smul : Monoid W;
       sdistr : forall x a b,
-        x <+>[smul] (a <+>[sadd] b) =e (x <+>[smul] a) <+>[sadd] (x <+>[smul] b);
+        x <+>[smul] (a <+>[sadd] b)
+        =e (x <+>[smul] a) <+>[sadd] (x <+>[smul] b);
       sabsorb : forall x, x <+>[smul] <0>[sadd] =e <0>[sadd];
     }.
 Arguments Semiring W {_}.

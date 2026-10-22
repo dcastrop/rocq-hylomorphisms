@@ -2,4 +2,4 @@
 -R _build/default/examples Hylo.Examples
 -R _build/default/extraction-setup Hylo.Extraction
 -arg -w
--arg -rewrite-rw,-missing-proof-command
+-arg +all

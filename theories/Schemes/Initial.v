@@ -1,14 +1,11 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-Require Import Hylo.Equivalence.
-Require Import Hylo.Morphism.
-Require Import Hylo.Container.
-Require Import Hylo.Coalgebra.
-Require Import Hylo.FCoalgebra.
-Require Import Hylo.Hylomorphisms.
+Require Import Hylo.Core.
+Require Import Hylo.Schemes.Hylomorphisms.
 
 (** * Least fixed points: the default initial algebra *)
 Section LFixDef.
@@ -102,7 +99,8 @@ Arguments lfix_out {Sh Esh P F}.
 Lemma fin_out `{F : Cont Sh P} : forall x, RecF (lfix_out (F := F)) x.
 Proof. induction x as [s Ih]. constructor. apply Ih. Defined.
 
-Canonical Structure f_out `{F : Cont Sh P} : RCoalg F (LFix F) := Rec (coalg := lfix_out) fin_out.
+Canonical Structure f_out `{F : Cont Sh P} : RCoalg F (LFix F) :=
+  Rec (coalg := lfix_out) fin_out.
 Arguments f_out & {Sh Esh P F}.
 #[export] Hint Unfold f_out : canonical.
 
@@ -112,6 +110,7 @@ Arguments f_out & {Sh Esh P F}.
   * initial: [cata g := hylo g l_out] is the unique algebra morphism
   * ([cata_univ] is [hylo_uniq]). [LFix F] is the default one, finite trees
   * are another, and any two are isomorphic ([iso]). *)
+#[mode = "- - - - - -"]
 Class Initial `(F : Cont Sh P) (T : Type) `{eT : setoid T} :=
   { l_in : App F T ~> T;
     l_out : RCoalg F T;
@@ -131,7 +130,8 @@ Arguments l_out_in {Sh Esh P F T eT _}.
      l_out_in := lfix_out_in (F := F)
   |}.
 
-#[export] Instance FinGFix_initial `(F : Cont Sh P) : Initial F {x : GFix F | FinF x} | 10 :=
+#[export] Instance FinGFix_initial `(F : Cont Sh P)
+  : Initial F {x : GFix F | FinF x} | 10 :=
   {| l_in := lg_in;
      l_out := lg_out_c;
      l_in_out := lg_in_out (F := F);
@@ -162,7 +162,8 @@ Section Cata.
     : cata g =e g \o fmap (cata g) \o l_out.
   Proof. apply hylo_unr. Qed.
 
-  Lemma cata_in `{eA : setoid A} (g : Alg F A) : cata g \o l_in =e g \o fmap (cata g).
+  Lemma cata_in `{eA : setoid A} (g : Alg F A)
+    : cata g \o l_in =e g \o fmap (cata g).
   Proof.
     rewrite (cata_unfold g) at 1; intros x; cbn [app comp].
     apply app_eq, app_eq, (l_out_in x).
@@ -194,7 +195,8 @@ Section Cata.
     : rana h =e l_in \o fmap (rana h) \o h.
   Proof. apply hylo_unr. Qed.
 
-  Corollary cata_ana_hylo `{eA : setoid A} `{eB : setoid B} (g : Alg F B) (h : RCoalg F A)
+  Corollary cata_ana_hylo `{eA : setoid A} `{eB : setoid B}
+    (g : Alg F B) (h : RCoalg F A)
     : cata g \o rana h =e hylo g h.
   Proof. apply hylo_fusion_l, cata_in. Qed.
 
@@ -202,8 +204,10 @@ Section Cata.
     : ana (T := GFix F) f =e ana l_out \o rana f.
   Proof.
     symmetry; apply ana_univ.
-    rewrite fmap_comp; ainsert (l_out_in (F := F) (T := T)) before (fmap (F := F) (rana f)).
-    arewrite <- (ana_unfold (T := GFix F) (l_out (T := T))); arewrite <- (rana_unfold f).
+    rewrite fmap_comp.
+    ainsert (l_out_in (F := F) (T := T)) before (fmap (F := F) (rana f)).
+    arewrite <- (ana_unfold (T := GFix F) (l_out (T := T))).
+    arewrite <- (rana_unfold f).
     reflexivity.
   Qed.
 End Cata.
@@ -212,7 +216,8 @@ Arguments rana & {Sh Esh P F T eT _ A eA}.
 
 (** Any two initial algebras are isomorphic *)
 Section InitialIso.
-  Context `{F : Cont Sh P} `{eT : setoid T} `{!Initial F T} `{eU : setoid U} `{!Initial F U}.
+  Context `{F : Cont Sh P} `{eT : setoid T} `{!Initial F T}
+    `{eU : setoid U} `{!Initial F U}.
 
   Definition iso : T ~> U := cata l_in.
 
@@ -249,7 +254,8 @@ Arguments cata_iso {Sh Esh P F} T {eT _} U {eU _} {A eA} g _.
 Arguments iso_rana {Sh Esh P F} T {eT _} U {eU _} {A eA} h _.
 Arguments ana_out_iso {Sh Esh P F} T {eT _} U {eU _} _.
 
-Lemma iso_inv `{F : Cont Sh P} `{eT : setoid T} `{!Initial F T} `{eU : setoid U} `{!Initial F U}
+Lemma iso_inv `{F : Cont Sh P} `{eT : setoid T} `{!Initial F T}
+  `{eU : setoid U} `{!Initial F U}
   : iso U T \o iso T U =e id.
 Proof. unfold iso at 1; rewrite (cata_iso T U l_in); apply cata_in_id. Qed.
 Arguments iso_inv {Sh Esh P F} T {eT _} U {eU _} _.
@@ -258,12 +264,14 @@ Arguments iso_inv {Sh Esh P F} T {eT _} U {eU _} _.
 Section FinTrees.
   Context `{F : Cont Sh P}.
 
-  Lemma fin_val_morph : forall x y : {x : GFix F | FinF x}, x =e y -> proj1_sig x =e proj1_sig y.
+  Lemma fin_val_morph : forall x y : {x : GFix F | FinF x},
+    x =e y -> proj1_sig x =e proj1_sig y.
   Proof. intros x y E; exact E. Qed.
 
   Definition fin_val : {x : GFix F | FinF x} ~> GFix F := MkMorph fin_val_morph.
 
-  Lemma fin_val_ana : fin_val =e ana (T := GFix F) (l_out (T := {x : GFix F | FinF x})).
+  Lemma fin_val_ana
+    : fin_val =e ana (T := GFix F) (l_out (T := {x : GFix F | FinF x})).
   Proof.
     apply ana_uniq; intros [x Fx]; cbn; split; [reflexivity|].
     intros e1 e2 Hv; rewrite (elem_val_eq Hv); reflexivity.
@@ -273,14 +281,18 @@ Section FinTrees.
     : liftP (ana h) (rcoalg_fin h) =e rana (T := {x : GFix F | FinF x}) h.
   Proof. apply rana_univ; intros x; apply (ana_unfold h x). Qed.
 
-  Corollary cata_ana_hylo_gf `{setoid A} `{setoid B} (g : Alg F B) (h : RCoalg F A)
+  Corollary cata_ana_hylo_gf `{setoid A} `{setoid B}
+    (g : Alg F B) (h : RCoalg F A)
     : cata g \o liftP (ana h) (rcoalg_fin h) =e hylo g h.
   Proof. arewrite (fin_rana h); apply cata_ana_hylo. Qed.
 
-  Corollary cata_ana_hylo_f `{setoid A} `{setoid B} (g : Alg F B) (h : RCoalg F A)
-    : cata (T := LFix F) g \o iso _ (LFix F) \o liftP (ana h) (rcoalg_fin h) =e hylo g h.
+  Corollary cata_ana_hylo_f `{setoid A} `{setoid B}
+    (g : Alg F B) (h : RCoalg F A)
+    : cata (T := LFix F) g \o iso _ (LFix F) \o liftP (ana h) (rcoalg_fin h)
+      =e hylo g h.
   Proof.
-    arewrite (cata_iso {x : GFix F | FinF x} (LFix F) g); apply cata_ana_hylo_gf.
+    arewrite (cata_iso {x : GFix F | FinF x} (LFix F) g).
+    apply cata_ana_hylo_gf.
   Qed.
 
   Corollary ana_rana `{setoid A} (f : RCoalg F A)
@@ -293,7 +305,8 @@ Section FinTrees.
   Proof.
     split; intros Hf.
     - assert (E : liftP f Ff =e iso (LFix F) {x : GFix F | FinF x} \o g).
-      { intros x; change (f x =e fin_val (iso (LFix F) {x : GFix F | FinF x} (g x))).
+      { intros x.
+        change (f x =e fin_val (iso (LFix F) {x : GFix F | FinF x} (g x))).
         rewrite (Hf x), (fin_val_ana _); cbn [app comp].
         symmetry; apply (ana_out_iso (LFix F) {x : GFix F | FinF x}). }
       intros x; cbn [app comp]; rewrite (E x).
@@ -308,13 +321,15 @@ End FinTrees.
 Corollary hylo_map_fusion_c `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
   `{eU : setoid U} `{!Initial G U} `{setoid A} `{setoid B}
   (g : Alg G B) (m : naturalM F G) (h : RCoalg F A)
-  : hylo g l_out \o hylo (l_in (T := U) \o natural m) h =e hylo g (natural m \o h).
+  : hylo g l_out \o hylo (l_in (T := U) \o natural m) h
+    =e hylo g (natural m \o h).
 Proof. rewrite hylo_map_shift, deforest; [reflexivity | apply l_out_in]. Qed.
 
 Corollary hylo_map_fusion `{F : Cont Sf P} `{setoid Sg} {G : Cont Sg P}
   `{eU : setoid U} `{!Initial G U} `{setoid A} `{setoid B}
   (g : Alg G B) (m : naturalM F G) (h : RCoalg F A)
-  : hylo g l_out \o hylo (l_in (T := U) \o natural m) h =e hylo (g \o natural m) h.
+  : hylo g l_out \o hylo (l_in (T := U) \o natural m) h
+    =e hylo (g \o natural m) h.
 Proof.
   rewrite hylo_map_shift, deforest, ?hylo_map_shift;
     [reflexivity | apply l_out_in].

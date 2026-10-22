@@ -1,3 +1,4 @@
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 
@@ -5,11 +6,11 @@ Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
 From Paco Require Import paco.
-Require Import Hylo.Cofix.
+Require Import Hylo.Core.Cofix.
+Require Import Hylo.Core.Equivalence.
+Require Import Hylo.Core.Morphism.
+Require Import Hylo.Core.Container.
 
-Require Import Hylo.Equivalence.
-Require Import Hylo.Morphism.
-Require Import Hylo.Container.
 
 Abbreviation Coalg F A := (A ~> App F A) (only parsing).
 
@@ -149,7 +150,8 @@ Section CoalgDef.
     intros e1 e2 Hv; right; apply CH, Ek, Hv; trivial.
   Qed.
 
-  Definition gfix_ana `{eA : setoid A} : Coalg F A ~> A ~> GFix := MkMorph ana_arr.
+  Definition gfix_ana `{eA : setoid A} : Coalg F A ~> A ~> GFix :=
+    MkMorph ana_arr.
 
   Lemma gfix_ana_univ `{eA : setoid A} (h : Coalg F A) (f : A ~> GFix)
     : f =e gfix_ana h <-> f =e gfix_in \o fmap f \o h.
@@ -164,7 +166,8 @@ Section CoalgDef.
       assert (Rfg : g0 =e gfix_in (fmap f (h x))) by (rewrite Ef; apply He).
       apply paco2_unfold in Rfg; auto with gfix; destruct Rfg as [Es Ek].
       simpl in Es, Ek; apply paco2_fold; constructor; trivial.
-      intros e1 e2 Hv; right; apply CH; destruct (Ek e1 e2 Hv) as [|[]]; trivial.
+      intros e1 e2 Hv; right; apply CH; destruct (Ek e1 e2 Hv) as [|[]];
+        trivial.
   Qed.
 End CoalgDef.
 
@@ -172,6 +175,7 @@ End CoalgDef.
   *
   * Dual to [Initial] (in [Algebra]): [T] is a terminal [F]-coalgebra, with
   * [g_out] and its inverse [g_in]. [GFix F] is the default one. *)
+#[mode = "- - - - - -"]
 Class Terminal `(F : Cont Sh P) (T : Type) `{eT : setoid T} :=
   { g_in : App F T ~> T;
     g_out : T ~> App F T;
@@ -214,8 +218,11 @@ Section TerminalLaws.
     : ana h =e g_in \o fmap (ana h) \o h.
   Proof. rewrite <- ana_univ. reflexivity. Qed.
 
-  Lemma ana_out `{eA : setoid A} (h : Coalg F A) : g_out \o ana h =e fmap (ana h) \o h.
-  Proof. intros x; cbn [app comp]; rewrite (ana_unfold h x); exact (g_out_in _). Qed.
+  Lemma ana_out `{eA : setoid A} (h : Coalg F A)
+    : g_out \o ana h =e fmap (ana h) \o h.
+  Proof.
+    intros x; cbn [app comp]; rewrite (ana_unfold h x); exact (g_out_in _).
+  Qed.
 
   Lemma ana_uniq `{eA : setoid A} (h : Coalg F A) (f : A ~> T)
     : g_out \o f =e fmap f \o h -> f =e ana h.
@@ -233,7 +240,8 @@ Arguments ana_out_id {Sh Esh P F} T {eT _} _.
 
 (** Any two terminal coalgebras are isomorphic *)
 Section TerminalIso.
-  Context `{F : Cont Sh P} `{eT : setoid T} `{!Terminal F T} `{eU : setoid U} `{!Terminal F U}.
+  Context `{F : Cont Sh P} `{eT : setoid T} `{!Terminal F T}
+    `{eU : setoid U} `{!Terminal F U}.
 
   Definition coiso : T ~> U := ana g_out.
 
@@ -243,7 +251,8 @@ Section TerminalIso.
   (** Anamorphisms do not depend on the terminal coalgebra *)
   Lemma ana_coiso `{eA : setoid A} (h : Coalg F A) : coiso \o ana h =e ana h.
   Proof.
-    apply ana_uniq; intros x; etransitivity; [apply (coiso_out _)|]; cbn [app comp].
+    apply ana_uniq; intros x; etransitivity; [apply (coiso_out _)|].
+    cbn [app comp].
     etransitivity; [apply app_eq, (ana_out h x)|]; reflexivity.
   Qed.
 End TerminalIso.
@@ -251,7 +260,8 @@ Arguments coiso {Sh Esh P F} T {eT _} U {eU _}.
 Arguments coiso_out {Sh Esh P F} T {eT _} U {eU _} _.
 Arguments ana_coiso {Sh Esh P F} T {eT _} U {eU _} {A eA} h _.
 
-Lemma coiso_inv `{F : Cont Sh P} `{eT : setoid T} `{!Terminal F T} `{eU : setoid U} `{!Terminal F U}
+Lemma coiso_inv `{F : Cont Sh P} `{eT : setoid T} `{!Terminal F T}
+  `{eU : setoid U} `{!Terminal F U}
   : coiso U T \o coiso T U =e id.
 Proof.
   rewrite <- (ana_out_id T); apply ana_uniq; intros x; cbn [app comp].

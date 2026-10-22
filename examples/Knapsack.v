@@ -1,32 +1,37 @@
+Set Warnings "-bad-template-constraint,-disj-pattern-notation".
+Set Warnings "-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Auto Template Polymorphism.
 
-From Hylo Require Import Hylo.
-Require Import Hylo.Utils.
+Require Import Hylo.Hylo.
+Require Import Hylo.Lists.
 
 From Stdlib Require Import List.
 From Stdlib Require Import Sint63.
 From Stdlib Require Import ZArith.
 From Stdlib Require Import Lia.
 From Stdlib Require Import ZifyUint63.
+From Stdlib Require Import ZifySint63.
 
-Require Import Hylo.Dyna.
-Require Import Hylo.Examples.ArrayTable.
+Require Import Hylo.Extraction.Specialise.
 
 (** * The specification: the naive (exponential) recursion
   *
   * [knapsack_naive n] is the best value of the items [(w, v)] that fit in [n],
   * one recursive call per item. The shapes are the items that fit, and the
   * positions their indices. *)
-Fixpoint max_int acc (l : list int) :=
-  match l with
-  | h :: t =>
-      if (acc <? h)%sint63 then max_int h t
-      else max_int acc t
-  | nil => acc
-  end.
+Definition imax (a b : int) : int := if (a <? b)%sint63 then b else a.
+
+(* The signed maximum, a monoid with unit [min_int] *)
+Program Definition max_m : Monoid int :=
+  {| skip := Sint63.min_int; par := morph_of (fun a => morph_of (imax a)) |}.
+Solve All Obligations with
+  intros; cbn; unfold imax; int_cases.
+
+Definition value : int * int ~> int :=
+  morph_of (fun rv => (Datatypes.fst rv + Datatypes.snd rv)%sint63).
 
 Definition fits (n : int) (wv : int * int) : bool :=
   ((0 <? Datatypes.fst wv)%uint63 && (Datatypes.fst wv <=? n)%uint63)%bool.
@@ -58,8 +63,7 @@ Proof.
 Qed.
 
 Definition naive_alg_ (x : App ItemsF int) : int :=
-  max_int 0 (map (fun rv => (Datatypes.fst rv + Datatypes.snd rv)%sint63)
-                 (kids (shape x) (fun i H => cont x (MkElem i H)))).
+  imax 0 (reduce max_m value (kids (shape x) (fun i H => cont x (MkElem i H)))).
 
 Lemma naive_alg_morph : forall x y, x =e y -> naive_alg_ x =e naive_alg_ y.
 Proof.
@@ -87,61 +91,97 @@ Proof.
   cbn -[Uint63.to_Z nth filter]; destruct (nth i _ _) as [w v], L as [_ Hf].
   unfold fits in Hf; cbn [Datatypes.fst] in *; lia.
 Qed.
+Arguments naive_c_fin : clear implicits.
 
 Definition naive_c wvs : RCoalg ItemsF int :=
-  mk_wf_coalg wf_lt (naive_c_fin (wvs := wvs)).
+  mk_wf_coalg wf_lt (naive_c_fin wvs).
 
 Definition knapsack_naive wvs : int ~> int := hylo naive_alg (naive_c wvs).
 
 (** * The calculation
   *
-  * [naive_fmap] unfolds the naive algebra on the naive coalgebra; the rest
-  * is [reenumerate] (with [look_down]) and [dyna_memo] from [Dyna]. *)
+  * The subproblems are read from a table ([reenumerate]), looked up down the
+  * count-down ([look_down]) with random access ([fast_drop_walk]), and the
+  * table is built by a loop ([dyna_loop]). *)
+Local Abbreviation wt p := (Datatypes.fst p).
+Local Abbreviation vl p := (Datatypes.snd p).
+
 Lemma kids_nth {X} (g : int * int -> X) s d
-  : kids s (fun i _ => g (nth i s d)) = map (fun p => (g p, Datatypes.snd p)) s.
+  : kids s (fun i _ => g (nth i s d)) = map (fun p => (g p, vl p)) s.
 Proof. induction s as [|[w v] s Ih]; cbn; [|f_equal]; trivial. Qed.
 
-Lemma naive_fmap wvs (g : int ~> int) b
+(* The naive step: the best value over the items that fit *)
+Lemma naive_step wvs (g : int ~> int) b
   : naive_alg (fmap g (naive_c wvs b))
-    = max_int 0 (map (fun rv => (Datatypes.fst rv + Datatypes.snd rv)%sint63)
-        (map (fun p => (g (b - Datatypes.fst p)%uint63, Datatypes.snd p))
-           (filter (fits b) wvs))).
+    = imax 0 (reduce max_m value (map_some (fun p =>
+        if fits b p then Some (g (b - wt p)%uint63, vl p) else None) wvs)).
 Proof.
-  cbn -[filter max_int]; unfold naive_alg_; cbn -[filter max_int].
-  rewrite (kids_nth (fun p => g (b - Datatypes.fst p)%uint63)); reflexivity.
+  cbn -[filter reduce imax]; unfold naive_alg_; cbn -[filter reduce imax].
+  rewrite (kids_nth (fun p => g (b - wt p)%uint63)), map_filter; reflexivity.
+Qed.
+
+(* An item fits iff its subproblem is in the table, down the count-down *)
+Lemma fits_look (g : int ~> int) b p
+  : (if fits b p then Some (g (b - wt p)%uint63, vl p) else None)
+    = option_map (fun r => (r, vl p)) (look_rec out_int_c g b (wt p)).
+Proof. unfold fits; rewrite look_down; destruct (_ && _)%bool; reflexivity.
 Qed.
 
 Section Calculation.
   Variable wvs : list (int * int).
 
-  (** Step 1: the algebra that reads the subproblems through a [look] down the
-    * count-down: an item fits iff its subproblem is there *)
+  (** Step 1: the algebra that reads the subproblems from the table *)
   Derive knap_alg_ in
     (forall (g : int ~> int) b,
         naive_alg (fmap g (naive_c wvs b))
-        = knap_alg_ (look_rec (Pa := int) out_int_c g b))
+        = knap_alg_ (look_rec out_int_c g b))
     as knap_look.
   Proof.
-    intros g b; rewrite naive_fmap, map_filter_pair; unfold fits.
-    erewrite map_some_ext by (intros; rewrite <- look_down; reflexivity).
+    intros g b.
+    rewrite naive_step.
+    setoid_rewrite fits_look.
+    rewrite reduce_map_option.
     abstracted.
   Qed.
 
   Lemma knap_alg_eq : forall l1 l2, l1 =e l2 -> knap_alg_ l1 =e knap_alg_ l2.
   Proof.
-    intros l1 l2 E; apply eq_leibniz; unfold knap_alg_; do 2 f_equal.
-    apply map_some_ext; intros p; rewrite (leibniz (E _)); reflexivity.
+    intros l1 l2 E; apply eq_leibniz; unfold knap_alg_; f_equal.
+    apply reduce_ext; intros [w v]; cbn; rewrite (leibniz (E w)); reflexivity.
   Qed.
 
   Definition knap_alg := MkMorph knap_alg_eq.
+  #[local] Hint Unfold knap_alg knap_alg_ max_m value : unfold_code.
 
-  (** Step 2: the program, a dynamorphism on persistent arrays *)
-  Derive knapsack_arr in (knapsack_naive wvs =e knapsack_arr)
+  (** Step 2: the loop's step, from the table, and its first entry *)
+  Derive knap_step in (knap_alg \o look_with fast_drop_walk \o nat_next
+                       =e knap_step) as knap_step_calc.
+  Proof. finished. Qed.
+
+  (* With an empty table no item fits *)
+  Lemma knap_base : knap_alg (look_with fast_drop_walk nat_leaf) =e 0%uint63.
+  Proof.
+    cbn [knap_alg app]; unfold knap_alg_; cbn -[reduce imax].
+    match goal with |- context [reduce ?m ?f] =>
+      assert (E : forall l, reduce m f l = min_int) end.
+    { induction l as [|h t Ih]; [apply leibniz, reduce_nil|].
+      rewrite (leibniz (reduce_cons _ _ _ _)), Ih; reflexivity. }
+    rewrite E; reflexivity.
+  Qed.
+
+  (** Step 3: the program, a loop over a persistent array *)
+  Derive knapsack_arr in (knapsack_naive wvs =e morph_of knapsack_arr)
     as knapsack_arr_calc.
   Proof.
     unfold knapsack_naive.
-    rewrite (reenumerate (U := ATab int) (alg := knap_alg) knap_look).
-    rewrite dyna_memo.
+    (* Memoise: the subproblems are read from a table *)
+    erewrite reenumerate.
+    (* The table of a count-down is built by a loop *)
+    erewrite dyna_loop.
+    (* The loop's step, its first entry, and the algebra on the table *)
+    2: exact knap_step_calc.
+    2: exact knap_base.
+    2: exact knap_look.
     finished.
   Qed.
 End Calculation.
