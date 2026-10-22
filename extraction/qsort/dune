@@ -4,8 +4,7 @@
 (rocq.extraction
  (prelude ExtrQSort)
  (extracted_modules qsort)
- (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction)
- (flags :standard -w +all))
+ (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction))
 
 (library
  (name extracted_qsort)

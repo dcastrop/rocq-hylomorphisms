@@ -11,13 +11,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Oldest supported Rocq (Abbreviation needs 9.2) and the latest release.
-        image:
-          - 'rocq/rocq-prover:9.2'
-          - 'rocq/rocq-prover:latest'
         include:
+          # Oldest supported Rocq (Abbreviation needs 9.2): only the default
+          # warnings fail (warning sets differ between Rocq versions).
+          - image: 'rocq/rocq-prover:9.2'
+            profile: release
+          # The development version: every warning fails, as locally.
+          - image: 'rocq/rocq-prover:9.3'
+            profile: dev
           # Upcoming Rocq: reported, but does not fail the workflow.
           - image: 'rocq/rocq-prover:dev'
+            profile: release
             experimental: true
     continue-on-error: ${{ matrix.experimental == true }}
     steps:
@@ -34,7 +38,7 @@ jobs:
           # extraction targets, which are not part of the installed package.
           script: |
             startGroup "Build"
-              dune build --display short
+              dune build --display short --profile ${{ matrix.profile }}
             endGroup
             startGroup "Check generated opam file is up to date"
               git diff --exit-code rocq-hylomorphisms.opam

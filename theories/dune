@@ -3,5 +3,4 @@
 (rocq.theory
  (name Hylo)
  (package rocq-hylomorphisms)
- (theories Stdlib Paco)
- (flags :standard -w +all))
+ (theories Stdlib Paco))

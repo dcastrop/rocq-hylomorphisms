@@ -1,4 +1,5 @@
-Set Warnings "-disj-pattern-notation,-deprecated-transitive-library-file".
+Set Warnings "-bad-template-constraint,-disj-pattern-notation".
+Set Warnings "-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.

@@ -1,0 +1,9 @@
+; Local builds (dev profile) fail on every warning. CI on other Rocq versions
+; builds with --profile release: all warnings shown, only the default ones fail.
+(env
+ (dev
+  (rocq
+   (flags (:standard -w +all))))
+ (release
+  (rocq
+   (flags (:standard -w all -w +default)))))

@@ -1,4 +1,4 @@
-Set Warnings "-deprecated-transitive-library-file".
+Set Warnings "-bad-template-constraint,-deprecated-transitive-library-file".
 Generalizable All Variables.
 Set Implicit Arguments.
 Unset Strict Implicit.

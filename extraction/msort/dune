@@ -4,8 +4,7 @@
 (rocq.extraction
  (prelude ExtrMSort)
  (extracted_modules msort)
- (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction)
- (flags :standard -w +all))
+ (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction))
 
 (library
  (name extracted_msort)

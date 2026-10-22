@@ -4,8 +4,7 @@
 (rocq.theory
  (name Hylo.Extraction)
  (package rocq-hylomorphisms)
- (theories Stdlib Paco Hylo)
- (flags :standard -w +all))
+ (theories Stdlib Paco Hylo))
 
 (library
  (name bigint)
