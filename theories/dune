@@ -3,4 +3,4 @@
 (rocq.theory
  (name Hylo)
  (package rocq-hylomorphisms)
- (theories Stdlib Paco))
+ (theories Stdlib Paco elpi elpi_elpi elpi.apps.coercion))

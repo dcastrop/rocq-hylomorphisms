@@ -8,4 +8,5 @@ Require Export Hylo.Core.Cofix.
 Require Export Hylo.Core.Coalgebra.
 Require Export Hylo.Core.FCoalgebra.
 Require Export Hylo.Core.ProperMorph.
+Require Export Hylo.Core.ElpiMorph.
 Require Export Hylo.Core.FiniteCont.

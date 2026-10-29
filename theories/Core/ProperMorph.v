@@ -23,6 +23,49 @@ Arguments proper_morph {A eA B eB} f {Hf}.
 Canonical Structure proper_morph.
 Extraction Inline proper_morph.
 
+(** * Curried morphisms
+
+  * [proper_morphn f] turns [f : A1 -> ... -> An -> B] with
+  * [Proper (eqRel ==> ... ==> eqRel) f] into [A1 ~> ... ~> An ~> B], for any
+  * [n >= 1]. [MorphOf T R M] computes, from the type [T] of [f], the relation
+  * [R] it must respect and the morphism type [M]; the step instance is tried
+  * first, so every argument of [f] becomes a morphism argument.
+  * [pmorph_eq] (related functions give equal morphisms) proves properness of
+  * each outer layer. [Hylo.Core.ElpiMorph] inserts [proper_morphn]
+  * automatically. *)
+#[mode = "! - - -"]
+Class MorphOf (T : Type) (R : relation T) (M : Type) `{eM : setoid M} :=
+  { pmorph : forall f : T, Proper R f -> M;
+    pmorph_eq : forall (f g : T) (Hf : Proper R f) (Hg : Proper R g),
+        R f g -> @pmorph f Hf =e @pmorph g Hg }.
+Arguments MorphOf T R M {eM}.
+Arguments pmorph {T R M eM _} f Hf.
+Arguments pmorph_eq {T R M eM _} f g Hf Hg _.
+
+#[export] Instance morph_of_base `{eA : setoid A} `{eB : setoid B}
+  : MorphOf (A -> B) (eqRel ==> eqRel)%signature (A ~> B) | 10 :=
+  { pmorph f Hf := @MkMorph _ _ _ _ f Hf;
+    pmorph_eq f g _ _ H x := H x x (reflexivity x) }.
+
+#[export] Instance morph_of_step `{eA : setoid A} `{MorphOf T R M}
+  : MorphOf (A -> T) (eqRel ==> R)%signature (A ~> M) | 1 :=
+  { pmorph f Hf :=
+      @MkMorph _ _ _ _ (fun a => pmorph (f a) (Hf a a (reflexivity a)))
+        (fun x y E => pmorph_eq (f x) (f y) _ _ (Hf x y E));
+    pmorph_eq f g _ _ H a := pmorph_eq (f a) (g a) _ _ (H a a (reflexivity a)) }.
+
+(** [Proper R f], searched only once [MorphOf] has computed [R]: searching
+  * [Proper ?R f] with [?R] unknown does not terminate. *)
+#[mode = "- ! -"]
+Class ProperAt {T} (R : relation T) (f : T) : Prop := proper_at : Proper R f.
+#[export] Instance proper_at_proper {T} (R : relation T) f `{Hf : !Proper R f}
+  : ProperAt R f := Hf.
+
+Definition proper_morphn `{MorphOf T R M} (f : T) `{Hf : !ProperAt R f} : M :=
+  pmorph f Hf.
+Arguments proper_morphn {T R M eM _} f {Hf}.
+Extraction Inline proper_morphn pmorph.
+
 (** Termination of a coalgebra, as a typeclass. *)
 #[mode = "- - - - - - -"]
 Class Terminates `{F : Cont Sh P} `{eA : setoid A} (c : Coalg F A) : Prop :=

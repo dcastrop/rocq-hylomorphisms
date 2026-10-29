@@ -1,4 +1,4 @@
 (rocq.theory
  (name Hylo.Examples)
  (package rocq-hylomorphisms)
- (theories Stdlib Paco Hylo Hylo.Extraction))
+ (theories Stdlib Paco elpi elpi_elpi elpi.apps.coercion Hylo Hylo.Extraction))

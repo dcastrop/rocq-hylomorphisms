@@ -4,7 +4,7 @@
 (rocq.extraction
  (prelude ExtrDigits)
  (extracted_modules digits)
- (theories Stdlib Paco Hylo Hylo.Examples Hylo.Extraction))
+ (theories Stdlib Paco elpi elpi_elpi elpi.apps.coercion Hylo Hylo.Examples Hylo.Extraction))
 
 (library
  (name extracted_digits)
