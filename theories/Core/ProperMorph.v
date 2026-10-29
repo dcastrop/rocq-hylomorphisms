@@ -203,9 +203,18 @@ Ltac proper_steps n :=
   | S ?m => try (progress proper_step; proper_steps m)
   end.
 
+(* Close [g x1 .. xn =e g y1 .. yn] by rewriting with the hypotheses, using
+   the [Proper] instance of [g] (e.g. a function under a pattern-matching
+   [fun '(i, a) b => g b i a]). [simpl] would unfold [eqRel] and hide it. *)
+Ltac proper_rewrite :=
+  cbv beta iota; cbn [fst snd]; intros;
+  repeat match goal with H : _ =e _ |- _ => rewrite H; clear H end;
+  reflexivity.
+
 Ltac proper_poly :=
   let x := fresh "x" in let y := fresh "y" in let E := fresh "E" in
-  intros x y E; decompose_eq x y E; try unfold_head; simpl; proper_steps 100.
+  intros x y E; decompose_eq x y E; try unfold_head;
+  first [ solve [proper_rewrite] | simpl; proper_steps 100 ].
 
 #[export] Hint Extern 11 (Proper (@eqRel (prod _ _) _ ==> _) _) =>
   resolve_setoids; unfold Proper, respectful; solve [proper_poly]
